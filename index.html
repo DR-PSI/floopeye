@@ -512,6 +512,11 @@ function drawSettings(){
       <button class="btn pri" style="width:100%;margin-top:12px" ${user?"":"disabled"} onclick="addStation()">เพิ่มสถานี</button>
       ${stations.length?"":`<button class="btn" style="width:100%;margin-top:8px" ${user?"":"disabled"} onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button>`}
     </div>
+    <div class="card"><h3>นำเข้าสถานีจากไฟล์</h3>
+      <p class="note">รองรับไฟล์จาก Overpass Turbo (GeoJSON หรือ JSON) และไฟล์ CSV ที่มีคอลัมน์ name, type, lat, lng สถานีที่มีชื่อซ้ำกับในระบบจะถูกข้าม ไม่เขียนทับพิกัดเดิม</p>
+      <input type="file" id="impFile" accept=".json,.geojson,.csv" ${user?"":"disabled"}>
+      <div id="impPreview"></div>
+      ${user?"":`<p class="note">เข้าสู่ระบบเพื่อใช้งาน</p>`}</div>
     <div class="card"><h3>การเชื่อมต่อ n8n</h3>
       <label for="wh">Webhook base URL</label><input type="url" id="wh" value="${esc(webhook())}">
       <button class="btn" style="margin-top:8px" onclick="localStorage.setItem('fe_webhook',$('#wh').value.trim());toast('บันทึกแล้ว')">บันทึก</button></div>
@@ -525,6 +530,71 @@ function drawSettings(){
         <li>จุดแจ้งน้ำท่วม Traffy รัศมี 1.5 กม. ใน 6 ชม.: จุดละ 8 สูงสุด 30</li>
         <li>0–24 ปกติ · 25–49 เฝ้าระวัง · 50–74 เสี่ยงสูง · 75+ วิกฤต</li>
       </ul></div>`;
+  const f=$("#impFile"); if(f) f.onchange = e => onImpFile(e.target.files[0]);
+}
+/* ============ IMPORT ============ */
+let impRows = [];
+const EXCL_OP = /กฟผ|EGAT|Generating|กฟภ|PEA|Provincial/i;
+const EXCL_SUB = /^(minor_distribution|industrial|traction|converter)$/i;
+const normName = n => String(n||"").replace(/การไฟฟ้านครหลวง|กฟน\.?|\bMEA\b|สถานีไฟฟ้าย่อย|สถานีไฟฟ้าต้นทาง|สถานีไฟฟ้า|สถานีย่อย|สถานีต้นทาง|substation|สถานี/gi,"").replace(/[()]/g," ").replace(/\s+/g," ").trim();
+const keyName = n => normName(n).replace(/\s/g,"").toLowerCase();
+function centroid(g){
+  const pts=[]; (function walk(c){ if(typeof c[0]==="number") pts.push(c); else c.forEach(walk); })(g.coordinates||[]);
+  if(!pts.length) return {};
+  return {lng: pts.reduce((a,p)=>a+p[0],0)/pts.length, lat: pts.reduce((a,p)=>a+p[1],0)/pts.length};
+}
+function parseCSV(text){
+  const lines = text.replace(/^\uFEFF/,"").split(/\r?\n/).filter(l=>l.trim());
+  const head = lines.shift().split(",").map(h=>h.trim().toLowerCase());
+  const col = names => head.findIndex(h => names.includes(h));
+  const iN=col(["name","ชื่อ","ชื่อสถานี"]), iT=col(["type","ประเภท"]), iLa=col(["lat","latitude","ละติจูด"]), iLo=col(["lng","lon","long","longitude","ลองจิจูด"]);
+  return lines.map(l => { const c=l.split(",").map(x=>x.trim()); const t=(c[iT]||"");
+    return {tags:{name:c[iN]}, lat:parseFloat(c[iLa]), lng:parseFloat(c[iLo]), forceType: /ต้นทาง|terminal/i.test(t)?"terminal":(t?"sub":null)}; });
+}
+function parseStationFile(text, fname){
+  let raw = [];
+  if(/\.csv$/i.test(fname)) raw = parseCSV(text);
+  else {
+    const j = JSON.parse(text);
+    if(j.elements) raw = j.elements.map(e => ({tags:e.tags||{}, lat:e.lat ?? e.center?.lat, lng:e.lon ?? e.center?.lon}));
+    else if(j.features) raw = j.features.map(f => { const p=f.properties||{}; return {tags: p.tags||p, ...(f.geometry?.type==="Point"?{lng:f.geometry.coordinates[0],lat:f.geometry.coordinates[1]}:centroid(f.geometry||{}))}; });
+  }
+  const have = new Set(stations.map(s => keyName(s.name))), seen = new Set(), out = [], skip = {noname:0, other:0, dup:0, nopos:0};
+  for(const r of raw){
+    const t = r.tags||{}, name = t["name:th"] || t.name || t["name:en"] || "";
+    if(!name){ skip.noname++; continue; }
+    if(EXCL_OP.test((t.operator||"")+" "+name) || EXCL_SUB.test(t.substation||"")){ skip.other++; continue; }
+    if(!(r.lat>5 && r.lat<21 && r.lng>97 && r.lng<106)){ skip.nopos++; continue; }
+    const k = keyName(name); if(!k || have.has(k) || seen.has(k)){ skip.dup++; continue; } seen.add(k);
+    const type = r.forceType || (/ต้นทาง|terminal/i.test(name) || /transmission/i.test(t.substation||"") ? "terminal" : "sub");
+    out.push({id: normName(name).replace(/[^\w\u0E00-\u0E7F]/g,"_"), name: normName(name), type, lat:+r.lat.toFixed(6), lng:+r.lng.toFixed(6), source: t.operator||""});
+  }
+  return {out, skip, total: raw.length};
+}
+function onImpFile(file){
+  if(!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const {out, skip, total} = parseStationFile(rd.result, file.name); impRows = out;
+      $("#impPreview").innerHTML = `<p class="note" style="margin-top:10px">อ่านได้ ${total} รายการ · นำเข้าได้ <b>${out.length}</b> · ข้าม: ไม่มีชื่อ ${skip.noname}, ของหน่วยงานอื่น/ไม่ใช่สถานีจำหน่าย ${skip.other}, ซ้ำ ${skip.dup}, พิกัดผิด ${skip.nopos}</p>
+        ${out.length?`<div class="gt-wrap" style="max-height:260px;overflow:auto"><table class="gt"><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>พิกัด</th></tr></thead><tbody>${out.map(r=>`<tr><td>${esc(r.name)}</td><td>${TYPE[r.type]}</td><td>${r.lat}, ${r.lng}</td></tr>`).join("")}</tbody></table></div>
+        <button class="btn pri" style="width:100%;margin-top:10px" onclick="commitImport()">นำเข้า ${out.length} สถานี</button>`:""}`;
+    }catch(e){ $("#impPreview").innerHTML = `<p class="note" style="color:var(--l3)">อ่านไฟล์ไม่ได้: ${esc(e.message)}</p>`; }
+  };
+  rd.readAsText(file);
+}
+async function commitImport(){
+  if(!user || !impRows.length) return;
+  const now = new Date().toISOString();
+  try{
+    for(let i=0;i<impRows.length;i+=400){
+      const b = db.batch();
+      impRows.slice(i,i+400).forEach(r => b.set(db.collection("flood_stations").doc(r.id), {name:r.name, type:r.type, lat:r.lat, lng:r.lng, approx:false, source:"import", createdAt:now}, {merge:true}));
+      await b.commit();
+    }
+    toast(`นำเข้า ${impRows.length} สถานีแล้ว`); impRows = []; drawMap._fit = false; $("#impPreview").innerHTML = "";
+  }catch(e){ toast("นำเข้าไม่สำเร็จ: "+e.message); }
 }
 function toggleDemo(){ demo=!demo; localStorage.setItem("fe_demo",demo?"1":"0"); renderAll(); }
 async function addStation(){
