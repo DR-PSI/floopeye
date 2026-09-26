@@ -49,7 +49,8 @@ nav button.on{color:var(--water)}
 
 /* summary strip on map */
 .strip{position:absolute;z-index:500;left:12px;right:12px;top:12px;display:flex;gap:6px;overflow-x:auto}
-.chip{flex:none;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(15,42,58,.12);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
+.chip{cursor:pointer;font-family:inherit;color:var(--text);flex:none;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(15,42,58,.12);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
+.chip.off{opacity:.45;text-decoration:line-through}
 .dot{width:10px;height:10px;border-radius:50%;flex:none}
 
 /* station list with water gauge */
@@ -117,11 +118,10 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .tip-t{color:var(--muted);font-size:12px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1000;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
-.pin{border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
-.pin.pulse{position:relative;animation:blink 1.2s ease-in-out infinite}
-.pin.pulse::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:3px solid var(--pc);animation:ring 1.2s ease-out infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes ring{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+.pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
+.pin.pulse{position:relative}
+.pin.pulse::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--pc);animation:ring 2.2s ease-out infinite}
+@keyframes ring{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(2.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){.pin.pulse,.pin.pulse::after{animation:none}.gauge i,.sheet{transition:none}}
 </style>
 </head>
@@ -256,31 +256,42 @@ function L_init(){
   return m;
 }
 let markers = {}, radiusLayer = null;
+let hiddenLv = new Set(JSON.parse(localStorage.getItem("fe_hidden") || "[]"));
+const BASE_SIZE = {"-1":8, 0:8, 1:10, 2:12, 3:14, 4:14};
+function pinScale(){ const z = map.getZoom(); return z >= 14 ? 1.7 : z >= 13 ? 1.45 : z >= 12 ? 1.2 : 1; }
 function drawMap(){
   Object.values(markers).forEach(mk => mk.remove()); markers = {};
-  const pts = [];
+  const pts = [], k = pinScale();
   for(const s of stations){
     if(s.lat == null || s.lng == null) continue;
-    const lv = levelOf(s), c = LV(lv).hex, size = lv>=3?22:lv===2?18:15;
+    pts.push([s.lat,s.lng]);
+    const lv = levelOf(s); if(hiddenLv.has(lv)) continue;
+    const c = LV(lv).hex, size = Math.round(BASE_SIZE[lv] * k);
     const icon = window.L.divIcon({className:"", iconSize:[size,size],
-      html:`<div class="pin ${lv>=2?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
-    const mk = window.L.marker([s.lat,s.lng],{icon}).addTo(map);
+      html:`<div class="pin ${lv>=3?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
+    const mk = window.L.marker([s.lat,s.lng],{icon, zIndexOffset:(lv+1)*1000}).addTo(map);
     const r = riskOf(s), lvl = LV(lv);
     mk.bindTooltip(`<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
-      <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&lv<4?` คะแนน ${r.score}`:""}</div>
-      ${r?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? r.wlPercent+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด</div>`:""}
+      <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!r.noData&&lv<4?` คะแนน ${r.score}`:""}</div>
+      ${r&&!r.noData?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? r.wlPercent+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด</div>`:""}
       <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
-    markers[s.id] = mk; pts.push([s.lat,s.lng]);
+    markers[s.id] = mk;
   }
-  if(pts.length && !drawMap._fit){ map.fitBounds(pts,{padding:[60,60],maxZoom:12}); drawMap._fit = true; }
-  // summary strip
-  const counts = [0,0,0,0,0], nod = {n:0};
-  stations.forEach(s => { const lv = levelOf(s); lv<0 ? nod.n++ : counts[lv]++; });
-  $("#strip").innerHTML = [4,3,2,1].map(i => `<span class="chip"><span class="dot" style="background:${LEVELS[i].hex}"></span>${LEVELS[i].name} ${counts[i]}</span>`).join("")
-    + (nod.n ? `<span class="chip"><span class="dot" style="background:${NODATA.hex}"></span>${NODATA.name} ${nod.n}</span>` : "");
+  if(pts.length && !drawMap._fit){ drawMap._fit = true; map.fitBounds(pts,{padding:[60,60],maxZoom:12}); }
+  // summary strip — กดเพื่อซ่อน/แสดง
+  const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
+  stations.forEach(s => counts[levelOf(s)]++);
+  const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
+  $("#strip").innerHTML = [4,3,2,1].map(i => chip(i, LEVELS[i])).join("") + (counts["-1"] ? chip(-1, NODATA) : "");
 }
+$("#strip").addEventListener("click", e => {
+  const b = e.target.closest("button[data-lv]"); if(!b) return;
+  const lv = +b.dataset.lv; hiddenLv.has(lv) ? hiddenLv.delete(lv) : hiddenLv.add(lv);
+  localStorage.setItem("fe_hidden", JSON.stringify([...hiddenLv])); drawMap();
+});
+map.on("zoomend", () => drawMap());
 
 /* ============ LIST ============ */
 function drawList(){
