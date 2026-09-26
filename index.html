@@ -290,7 +290,7 @@ function drawList(){
   if(filter==="alert") arr = arr.filter(s => levelOf(s) >= 1);
   if(filter==="confirmed") arr = arr.filter(isConfirmed);
   if(filter==="nopin") arr = arr.filter(s => s.lat == null);
-  arr.sort((a,b) => (levelOf(b)-levelOf(a)) || ((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || a.name.localeCompare(b.name,"th"));
+  arr.sort((a,b) => (levelOf(b)-levelOf(a)) || ((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th"));
   if(!stations.length){
     $("#list").innerHTML = `<div class="empty">ยังไม่มีสถานีในระบบ<br><button class="btn pri" style="margin-top:12px" onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button></div>`;
     return;
@@ -666,7 +666,7 @@ function renderAll(){
   $("#updated").innerHTML = latest ? `ประเมินล่าสุด<br>${thTime(latest)}` : (demo ? "โหมดตัวอย่าง" : "รอข้อมูลจาก n8n");
 }
 db.collection("flood_stations").onSnapshot(snap => {
-  stations = snap.docs.map(d => ({id:d.id, ...d.data()})); renderAll();
+  stations = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, name: s.name || `(ไม่มีชื่อ: ${s.id})`})); renderAll();
 }, e => { $("#updated").textContent = "เชื่อมฐานข้อมูลไม่ได้"; toast(e.message); });
 db.collection("flood_reports").orderBy("receivedAt","desc").limit(5).onSnapshot(snap => {
   reports = snap.docs.map(d => d.data()).filter(r => r.valid !== false); drawReport();
