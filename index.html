@@ -278,7 +278,7 @@ function drawMap(){
   // summary strip
   const counts = [0,0,0,0,0], nod = {n:0};
   stations.forEach(s => { const lv = levelOf(s); lv<0 ? nod.n++ : counts[lv]++; });
-  $("#strip").innerHTML = [4,3,2,1,0].map(i => `<span class="chip"><span class="dot" style="background:${LEVELS[i].hex}"></span>${LEVELS[i].name} ${counts[i]}</span>`).join("")
+  $("#strip").innerHTML = [4,3,2,1].map(i => `<span class="chip"><span class="dot" style="background:${LEVELS[i].hex}"></span>${LEVELS[i].name} ${counts[i]}</span>`).join("")
     + (nod.n ? `<span class="chip"><span class="dot" style="background:${NODATA.hex}"></span>ไม่มีข้อมูล ${nod.n}</span>` : "");
 }
 
@@ -347,6 +347,7 @@ function drawSheet(){
         <button ${can?"":"disabled"} onclick="saveCoords('${esc(s.id)}')">บันทึกพิกัด</button>
       </div>
     </div>
+    ${can?`<div class="sec"><button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" onclick="deleteStation('${esc(s.id)}')">ลบสถานีนี้</button></div>`:""}
     <p class="note sec">คะแนนเสี่ยงคำนวณจากข้อมูลรอบสถานี ไม่ได้วัดน้ำในรั้วสถานีโดยตรง สถานะ "น้ำท่วมขัง" มาจากรายงาน กฟน. และมีผล ${CONFIRM_TTL_H} ชม.</p>`;
 }
 async function setAccess(id, status){
@@ -355,6 +356,13 @@ async function setAccess(id, status){
     await db.collection("flood_stations").doc(id).set({access:{status, at:new Date().toISOString(), by:user.displayName||user.email}},{merge:true});
     toast("บันทึกสถานะการเข้าถึงแล้ว");
   }catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
+}
+async function deleteStation(id){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  const s = stations.find(x => x.id === id); if(!s) return;
+  if(!confirm(`ลบ${TYPE[s.type]||"สถานี"}${s.name} ออกจากระบบ?\nข้อมูลคะแนนและสถานะของสถานีนี้จะหายไปด้วย`)) return;
+  try{ await db.collection("flood_stations").doc(id).delete(); closeSheet(); toast(`ลบสถานี${s.name}แล้ว`); }
+  catch(e){ toast("ลบไม่สำเร็จ: "+e.message); }
 }
 function useGPS(){
   if(!navigator.geolocation) return toast("อุปกรณ์นี้ไม่รองรับตำแหน่ง");
