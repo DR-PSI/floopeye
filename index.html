@@ -367,16 +367,7 @@ function drawReport(){
         ${(last.pumpOutages||[]).length?`<li>บ่อสูบน้ำไฟดับ: ${last.pumpOutages.map(esc).join(", ")}</li>`:""}
         ${(last.unmatched||[]).length?`<li>ชื่อสถานีที่ยังไม่มีในระบบ (สร้างใหม่แล้ว รอปักหมุด): ${last.unmatched.map(esc).join(", ")}</li>`:""}
         ${last.notes?`<li>${esc(last.notes)}</li>`:""}
-      </ul></div>`:""}
-    <div class="card"><h3>อ่านภาพรายงาน กฟน. ด้วย AI</h3>
-      <p class="note">เลือก infographic "รายงานสถานการณ์ระบบไฟฟ้าจากเหตุการณ์ฝนตก-น้ำท่วม" ระบบจะดึงรายชื่อสถานีที่น้ำท่วมขังและสถานะการเข้าถึง แล้วอัปเดตแผนที่ให้อัตโนมัติ</p>
-      <div class="drop"><input type="file" accept="image/*" id="imgIn" ${user?"":"disabled"}>
-        ${pendingImg?`<img src="${pendingImg}" alt="ภาพรายงานที่เลือก">`:""}</div>
-      <button class="btn pri" style="width:100%;margin-top:10px" id="readBtn" ${pendingImg&&user?"":"disabled"} onclick="readInfographic()">อ่านรายงานและอัปเดตสถานี</button>
-      ${user?"":`<p class="note">เข้าสู่ระบบเพื่อใช้งาน</p>`}
-      <pre id="readOut" class="note" style="white-space:pre-wrap"></pre>
-    </div>`;
-  const inp = $("#imgIn"); if(inp) inp.onchange = e => loadImage(e.target.files[0]);
+      </ul></div>`:""}`;
 }
 function loadImage(file){
   if(!file) return;
@@ -428,7 +419,7 @@ function drawSettings(){
       <button class="btn" onclick="toggleDemo()">${demo?"ปิดโหมดตัวอย่าง":"เปิดโหมดตัวอย่าง"}</button></div>
     <div class="card"><h3>เกณฑ์คะแนนเสี่ยง</h3>
       <ul class="note">
-        <li>ฝนสะสม 24 ชม. สูงสุดในรัศมี 3 กม.: ≥90 มม. 40 คะแนน, ≥60 30, ≥35 18, ≥10 6</li>
+        <li>ฝนสะสม 24 ชม. สูงสุดในรัศมี 3 กม.: ≥150 มม. 65 คะแนน, ≥120 55, ≥90 45, ≥60 30, ≥35 15, ≥10 5</li>
         <li>ระดับน้ำคลอง/แม่น้ำใกล้สุดในรัศมี 5 กม. (% ความจุตลิ่ง): ≥100% 35, ≥90% 25, ≥80% 15, ≥70% 6</li>
         <li>จุดแจ้งน้ำท่วม Traffy รัศมี 1.5 กม. ใน 6 ชม.: จุดละ 8 สูงสุด 30</li>
         <li>0–24 ปกติ · 25–49 เฝ้าระวัง · 50–74 เสี่ยงสูง · 75+ วิกฤต</li>
