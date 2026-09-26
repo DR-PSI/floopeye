@@ -185,7 +185,7 @@ const LEVELS = [
   {name:"วิกฤต",      color:"var(--l3)", hex:"#e03347"},
   {name:"น้ำท่วมขัง",  color:"var(--l4)", hex:"#d4145a"},
 ];
-const NODATA = {name:"ยังไม่มีข้อมูล", color:"var(--lx)", hex:"#8aa0ad"};
+const NODATA = {name:"ข้อมูลไม่พอ", color:"var(--lx)", hex:"#8aa0ad"};
 const ACCESS = {
   normal:{t:"เข้าได้ปกติ"}, high_vehicle:{t:"รถยกสูงเข้าได้"},
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
@@ -234,7 +234,7 @@ function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
 function levelOf(s){
   if(isConfirmed(s)) return 4;
-  const r = riskOf(s); return r ? r.level : -1;
+  const r = riskOf(s); return r && !r.noData ? r.level : -1;
 }
 const LV = lv => lv < 0 ? NODATA : LEVELS[lv];
 function gaugePct(s){ const lv=levelOf(s); if(lv===4) return 100; const r=riskOf(s); return r ? Math.max(4, r.score) : 0; }
@@ -300,7 +300,7 @@ function drawList(){
   $("#list").innerHTML = arr.map(s => {
     const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s);
     const meta = [];
-    if(r) meta.push(`ฝน 24 ชม. ${r.rain24h ?? "-"} มม.`, `แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด`);
+    if(r) meta.push(r.rain24h == null ? "ไม่มีสถานีวัดฝนในรัศมี 15 กม." : `ฝน 24 ชม. ${r.rain24h} มม.`, `แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด`);
     if(a && a.status && a.status!=="unknown") meta.push(ACCESS[a.status]?.t);
     if(s.lat == null) meta.push("ยังไม่ปักหมุด");
     return `<button class="row" onclick="openSheet('${esc(s.id)}')">
@@ -308,7 +308,7 @@ function drawList(){
       <span class="body"><h3>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</h3>
         <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>
         <div class="meta" style="margin-top:4px">${meta.map(esc).join(" / ") || "&nbsp;"}</div></span>
-      <span class="score" style="color:${lvl.hex}">${lv===4?"!":(r?r.score:"–")}</span>
+      <span class="score" style="color:${lvl.hex}">${lv===4?"!":(r&&!r.noData?r.score:"–")}</span>
     </button>`;
   }).join("");
 }
@@ -331,7 +331,7 @@ function drawSheet(){
     </div>
     ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
     <div class="kv">
-      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม. (รัศมี 3 กม.)</span></div>
+      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:" · ไม่มีสถานีวัดใกล้"}</span></div>
       <div><b>${r?.wlPercent != null ? r.wlPercent+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
       <div><b>${r?.traffyCount ?? "-"}</b><span>จุดแจ้งน้ำท่วม Traffy (1.5 กม. / 6 ชม.)</span></div>
       <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
@@ -461,7 +461,7 @@ function drawGuide(){
     ["การเข้าถึงสถานี","แอป FloodEye","เจ้าหน้าที่หน้างาน","เมื่อมีการอัปเดต"]])}</div>
 
   <div class="card"><h3>ฝนสะสม 24 ชั่วโมง (สูงสุด 65 คะแนน)</h3>
-    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 8 กม.</p>
+    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 15 กม. หากยังไม่มีสถานีวัดฝน ระดับน้ำ และจุดแจ้งน้ำท่วมเลย จะแสดงเป็น "ข้อมูลไม่พอ" แทน "ปกติ"</p>
     ${gtable(["ปริมาณฝน (มม.)","คะแนน"],[["150 ขึ้นไป","65"],["120–149","55"],["90–119","45"],["60–89","30"],["35–59","15"],["10–34","5"],["น้อยกว่า 10","0"]])}</div>
 
   <div class="card"><h3>ระดับน้ำคลอง/แม่น้ำ (สูงสุด 35 คะแนน)</h3>
@@ -556,7 +556,7 @@ function drawSettings(){
 let impRows = [];
 const EXCL_OP = /กฟผ|EGAT|Generating|กฟภ|PEA|Provincial/i;
 const EXCL_SUB = /^(minor_distribution|industrial|traction|converter)$/i;
-const normName = n => String(n||"").replace(/การไฟฟ้านครหลวง|กฟน\.?|\bMEA\b|สถานีไฟฟ้าย่อย|สถานีไฟฟ้าต้นทาง|สถานีไฟฟ้า|สถานีย่อย|สถานีต้นทาง|substation|สถานี/gi,"").replace(/[()]/g," ").replace(/\s+/g," ").trim();
+const normName = n => String(n||"").replace(/\*+/g," ").replace(/การไฟฟ้านครหลวง|กฟน\.?|\bMEA\b|สถานีไฟฟ้าย่อย|สถานีไฟฟ้าต้นทาง|สถานีไฟฟ้า|สถานีย่อย|สถานีต้นทาง|substation|สถานี/gi,"").replace(/[()]/g," ").replace(/\s+/g," ").trim();
 const keyName = n => normName(n).replace(/\s/g,"").toLowerCase();
 function centroid(g){
   const pts=[]; (function walk(c){ if(typeof c[0]==="number") pts.push(c); else c.forEach(walk); })(g.coordinates||[]);
