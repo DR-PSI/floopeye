@@ -192,14 +192,14 @@ const ACCESS = {
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
 
-/* สถานีจากรายงาน กฟน. 26 ก.ย. 2569 13.30 น. — พิกัดเป็นค่าประมาณระดับเขต ต้องแก้ให้ตรงหน้างาน */
+/* สถานีจากรายงาน กฟน. 26 ก.ย. 2569 — พิกัดจาก Google Maps */
 const SEED = [
-  {id:"nongchok", name:"หนองจอก", type:"terminal", lat:13.8556, lng:100.8625, approx:true},
-  {id:"khlongroi", name:"คลองร้อย", type:"sub", lat:null, lng:null, approx:true},
-  {id:"donmueang", name:"ดอนเมือง", type:"sub", lat:13.9126, lng:100.6068, approx:true},
-  {id:"ramkhamhaeng", name:"รามคำแหง", type:"sub", lat:13.7563, lng:100.6180, approx:true},
-  {id:"nana", name:"นานา", type:"sub", lat:13.7406, lng:100.5550, approx:true},
-  {id:"bangphli", name:"บางพลี", type:"terminal", lat:13.6060, lng:100.7060, approx:true},
+  {id:"nongchok", name:"หนองจอก", type:"terminal", lat:13.814339, lng:100.802980, approx:false},
+  {id:"khlongroi", name:"คลองร้อย", type:"sub", lat:13.555107, lng:100.773559, approx:false},
+  {id:"donmueang", name:"ดอนเมือง", type:"sub", lat:13.882433, lng:100.585367, approx:false},
+  {id:"ramkhamhaeng", name:"รามคำแหง", type:"sub", lat:13.758146, lng:100.627451, approx:false},
+  {id:"nana", name:"นานา", type:"sub", lat:13.750147, lng:100.555194, approx:false},
+  {id:"bangphli", name:"บางพลี", type:"terminal", lat:13.640355, lng:100.689646, approx:false},
 ];
 
 /* ============ STATE ============ */
@@ -339,6 +339,10 @@ function drawSheet(){
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
     </div>
+    ${can?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
+      <div class="two"><input type="text" id="eName" value="${esc(s.name)}" placeholder="ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)">
+      <select id="eType"><option value="sub" ${s.type!=="terminal"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option></select></div>
+      <div class="seg" style="margin-top:8px"><button onclick="saveName('${esc(s.id)}')">บันทึกชื่อ</button></div></div>`:""}
     <div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
       <div class="two"><input type="number" step="any" id="eLat" placeholder="ละติจูด" value="${s.lat??""}" ${can?"":"disabled"}>
       <input type="number" step="any" id="eLng" placeholder="ลองจิจูด" value="${s.lng??""}" ${can?"":"disabled"}></div>
@@ -356,6 +360,14 @@ async function setAccess(id, status){
     await db.collection("flood_stations").doc(id).set({access:{status, at:new Date().toISOString(), by:user.displayName||user.email}},{merge:true});
     toast("บันทึกสถานะการเข้าถึงแล้ว");
   }catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
+}
+async function saveName(id){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  const name = $("#eName").value.trim().replace(/^สถานี(ไฟฟ้า)?(ต้นทาง|ย่อย)?/,"").trim();
+  if(!name) return toast("ใส่ชื่อสถานี");
+  if(stations.some(x => x.id!==id && x.name===name)) return toast("มีสถานีชื่อนี้อยู่แล้ว");
+  try{ await db.collection("flood_stations").doc(id).set({name, type:$("#eType").value},{merge:true}); toast("บันทึกชื่อแล้ว"); }
+  catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
 }
 async function deleteStation(id){
   if(!user) return toast("เข้าสู่ระบบก่อน");
