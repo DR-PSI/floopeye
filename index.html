@@ -348,7 +348,7 @@ function drawSheet(){
       <div><b>${r ? (r.traffyCount||0)+(r.longdoCount||0) : "-"}</b><span>จุดแจ้งน้ำท่วม Traffy + Longdo (1.5 กม.)</span></div>
       <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
     </div>
-    ${r&&r.reports&&r.reports.length?`<div class="sec"><h4>รายงานน้ำท่วมใกล้สถานี</h4><ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.</li>`).join("")}</ul></div>`:""}
+    ${r&&r.reports?`<div class="sec"><h4>รายงานน้ำท่วมในรัศมี 3 กม. (Traffy + Longdo)</h4>${r.reports.length?`<ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.${x.ageH!=null?` · ${x.ageH<1?"ไม่ถึง 1":Math.round(x.ageH)} ชม.ก่อน`:""}${x.active===false?" · <b>สิ้นสุดแล้ว</b>":""}</li>`).join("")}</ul><p class="note" style="margin-top:4px">นับเป็นคะแนนเฉพาะรายงานที่ยังไม่สิ้นสุดในรัศมี 1.5 กม.</p>`:`<p class="note">ไม่มีรายงานน้ำท่วมในรัศมี 3 กม. ช่วง 6 ชม. ที่ผ่านมา</p>`}</div>`:""}
     ${s.cctv?(()=>{ const c=s.cctv, names=["ถนนแห้ง","ถนนเปียก","น้ำขังขอบถนน","น้ำท่วมผิวถนน","น้ำท่วมสูง"], cols=["#1f9d63","#8aa0ad","#d9a400","#ea6a12","#e03347"];
       const vis={night:"กลางคืน",blurred:"ภาพเบลอ",obstructed:"มีสิ่งบัง",offline:"กล้องออฟไลน์"}[c.visibility];
       return `<div class="sec"><h4>กล้อง CCTV · ${esc(c.camera)} · ห่าง ${c.distKm} กม.</h4>
@@ -373,7 +373,7 @@ function drawSheet(){
       </div>
     </div>
     ${can?`<div class="sec"><button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" onclick="deleteStation('${esc(s.id)}')">ลบสถานีนี้</button></div>`:""}
-    <p class="note sec">คะแนนเสี่ยงคำนวณจากข้อมูลรอบสถานี ไม่ได้วัดน้ำในรั้วสถานีโดยตรง สถานะ "น้ำท่วมขัง" มาจากรายงาน กฟน. และมีผล ${CONFIRM_TTL_H} ชม.</p>`;
+    <p class="note sec">คะแนนเสี่ยงคำนวณจากข้อมูลรอบสถานี ไม่ได้วัดน้ำในรั้วสถานีโดยตรง</p>`;
 }
 async function setAccess(id, status){
   if(!user) return toast("เข้าสู่ระบบก่อน");
