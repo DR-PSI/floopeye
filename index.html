@@ -230,7 +230,7 @@ function riskOf(s){
   const score = Math.min(100, Math.round(rain*0.3 + Math.max(0,wl-60)*0.8 + traffy*8));
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
-const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount));
+const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
 function levelOf(s){
@@ -274,7 +274,7 @@ function drawMap(){
     const r = riskOf(s), lvl = LV(lv);
     mk.bindTooltip(`<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
       <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
-      ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? r.wlPercent+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด</div>`:""}
+      ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด</div>`:""}
       <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
@@ -312,7 +312,7 @@ function drawList(){
   $("#list").innerHTML = arr.map(s => {
     const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s);
     const meta = [];
-    if(r) meta.push(r.rain24h == null ? "ไม่มีสถานีวัดฝนในรัศมี 15 กม." : `ฝน 24 ชม. ${r.rain24h} มม.`, `แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด`);
+    if(r) meta.push(r.rain24h == null ? "ไม่มีสถานีวัดฝนในรัศมี 15 กม." : `ฝน 24 ชม. ${r.rain24h} มม.`, `แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด`);
     if(a && a.status && a.status!=="unknown") meta.push(ACCESS[a.status]?.t);
     if(s.lat == null) meta.push("ยังไม่ปักหมุด");
     return `<button class="row" onclick="openSheet('${esc(s.id)}')">
@@ -343,11 +343,19 @@ function drawSheet(){
     </div>
     ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
     <div class="kv">
-      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:" · ไม่มีสถานีวัดใกล้"}</span></div>
-      <div><b>${r?.wlPercent != null ? r.wlPercent+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
-      <div><b>${r?.traffyCount ?? "-"}</b><span>จุดแจ้งน้ำท่วม Traffy (1.5 กม. / 6 ชม.)</span></div>
+      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:(r&&r.rain24h==null?" · ไม่มีสถานีวัดใกล้":"")}</span></div>
+      <div><b>${r?.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
+      <div><b>${r ? (r.traffyCount||0)+(r.longdoCount||0) : "-"}</b><span>จุดแจ้งน้ำท่วม Traffy + Longdo (1.5 กม.)</span></div>
       <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
     </div>
+    ${r&&r.reports&&r.reports.length?`<div class="sec"><h4>รายงานน้ำท่วมใกล้สถานี</h4><ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.</li>`).join("")}</ul></div>`:""}
+    ${s.cctv?(()=>{ const c=s.cctv, names=["ถนนแห้ง","ถนนเปียก","น้ำขังขอบถนน","น้ำท่วมผิวถนน","น้ำท่วมสูง"], cols=["#1f9d63","#8aa0ad","#d9a400","#ea6a12","#e03347"];
+      const vis={night:"กลางคืน",blurred:"ภาพเบลอ",obstructed:"มีสิ่งบัง",offline:"กล้องออฟไลน์"}[c.visibility];
+      return `<div class="sec"><h4>กล้อง CCTV · ${esc(c.camera)} · ห่าง ${c.distKm} กม.</h4>
+        <img src="${esc(c.imgUrl)}&t=${Date.now()}" alt="ภาพจากกล้อง ${esc(c.camera)}" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#e6eef3;min-height:120px" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'note',textContent:'โหลดภาพกล้องไม่ได้'}))">
+        <p style="margin:8px 0 2px"><span class="lvl" style="background:${cols[c.level]??"#8aa0ad"}">AI: ${names[c.level]??"-"}</span>
+        ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
+        <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
@@ -470,6 +478,7 @@ function drawGuide(){
     ["ฝนสะสม 24 ชม.","ThaiWater","สสน. รวมข้อมูลจากสถานีโทรมาตรหลายหน่วยงาน","ทุก 15 นาที"],
     ["ระดับน้ำคลอง/แม่น้ำ","ThaiWater","สสน.","ทุก 15 นาที"],
     ["ประชาชนแจ้งน้ำท่วม","Traffy Fondue","NECTEC (สวทช.) ร่วมกับ กทม.","ทุก 15 นาที"],
+    ["รายงานน้ำท่วมบนถนน","Longdo Traffic","มูลนิธิ iTIC รวมรายงานผู้ใช้และกรมทางหลวง","ทุก 15 นาที"],
     ["การเข้าถึงสถานี","แอป FloodEye","เจ้าหน้าที่หน้างาน","เมื่อมีการอัปเดต"]])}</div>
 
   <div class="card"><h3>ฝนสะสม 24 ชั่วโมง (สูงสุด 65 คะแนน)</h3>
@@ -480,8 +489,8 @@ function drawGuide(){
     <p>ใช้สถานีวัดระดับน้ำที่ใกล้ที่สุดในรัศมี 5 กม. คิดเป็นร้อยละเทียบความสูงตลิ่ง โดย 0% คือท้องคลอง และ 100% คือระดับเสมอตลิ่ง</p>
     ${gtable(["ระดับน้ำ (% ความสูงตลิ่ง)","คะแนน"],[["100 ขึ้นไป (ล้นตลิ่ง)","35"],["90–99","25"],["80–89","15"],["70–79","6"],["น้อยกว่า 70","0"]])}</div>
 
-  <div class="card"><h3>ประชาชนแจ้งน้ำท่วม (สูงสุด 30 คะแนน)</h3>
-    <p>นับเรื่องแจ้งผ่าน Traffy Fondue ที่มีคำว่า "ท่วม" ในประเภทปัญหาหรือรายละเอียด อยู่ในรัศมี 1.5 กม. และแจ้งภายใน 6 ชั่วโมงล่าสุด ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
+  <div class="card"><h3>จุดแจ้งน้ำท่วม (สูงสุด 30 คะแนน)</h3>
+    <p>นับจุดแจ้งน้ำท่วมในรัศมี 1.5 กม. จาก 2 แหล่ง: Traffy Fondue (เรื่องที่มีคำว่า "ท่วม" แจ้งภายใน 6 ชั่วโมง) และ Longdo Traffic / กรมทางหลวง (รายงานน้ำท่วมที่ยังไม่หมดเวลา) ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
     <p style="margin:0"><b>คะแนนรวม = คะแนนฝน + คะแนนระดับน้ำ + คะแนนแจ้งน้ำท่วม</b> (สูงสุด 100 คะแนน)</p></div>
 
   <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
@@ -559,7 +568,7 @@ function drawSettings(){
       <ul class="note">
         <li>ฝนสะสม 24 ชม. สูงสุดในรัศมี 3 กม.: ≥150 มม. 65 คะแนน, ≥120 55, ≥90 45, ≥60 30, ≥35 15, ≥10 5</li>
         <li>ระดับน้ำคลอง/แม่น้ำใกล้สุดในรัศมี 5 กม. (% ความจุตลิ่ง): ≥100% 35, ≥90% 25, ≥80% 15, ≥70% 6</li>
-        <li>จุดแจ้งน้ำท่วม Traffy รัศมี 1.5 กม. ใน 6 ชม.: จุดละ 8 สูงสุด 30</li>
+        <li>จุดแจ้งน้ำท่วม Traffy (6 ชม.) + Longdo/กรมทางหลวง (ที่ยังไม่หมดเวลา) รัศมี 1.5 กม.: จุดละ 8 สูงสุด 30</li>
         <li>0–24 ปกติ · 25–49 เฝ้าระวัง · 50–74 เสี่ยงสูง · 75+ วิกฤต</li>
       </ul></div>`;
   const f=$("#impFile"); if(f) f.onchange = e => onImpFile(e.target.files[0]);
