@@ -230,11 +230,12 @@ function riskOf(s){
   const score = Math.min(100, Math.round(rain*0.3 + Math.max(0,wl-60)*0.8 + traffy*8));
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
+const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount));
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
 function levelOf(s){
   if(isConfirmed(s)) return 4;
-  const r = riskOf(s); return r && !r.noData ? r.level : -1;
+  const r = riskOf(s); return r && !isNoData(r) ? r.level : -1;
 }
 const LV = lv => lv < 0 ? NODATA : LEVELS[lv];
 function gaugePct(s){ const lv=levelOf(s); if(lv===4) return 100; const r=riskOf(s); return r ? Math.max(4, r.score) : 0; }
@@ -272,8 +273,8 @@ function drawMap(){
     const mk = window.L.marker([s.lat,s.lng],{icon, zIndexOffset:(lv+1)*1000}).addTo(map);
     const r = riskOf(s), lvl = LV(lv);
     mk.bindTooltip(`<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
-      <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!r.noData&&lv<4?` คะแนน ${r.score}`:""}</div>
-      ${r&&!r.noData?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? r.wlPercent+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด</div>`:""}
+      <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
+      ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? r.wlPercent+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${r.traffyCount ?? 0} จุด</div>`:""}
       <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
@@ -319,7 +320,7 @@ function drawList(){
       <span class="body"><h3>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</h3>
         <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>
         <div class="meta" style="margin-top:4px">${meta.map(esc).join(" / ") || "&nbsp;"}</div></span>
-      <span class="score" style="color:${lvl.hex}">${lv===4?"!":(r&&!r.noData?r.score:"–")}</span>
+      <span class="score" style="color:${lvl.hex}">${lv===4?"!":(r&&!isNoData(r)?r.score:"–")}</span>
     </button>`;
   }).join("");
 }
