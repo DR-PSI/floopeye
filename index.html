@@ -14,7 +14,7 @@
 :root{
   --bg:#f3f7fa; --panel:#ffffff; --panel2:#eef4f8; --line:#d5e2ea;
   --text:#0f2a3a; --muted:#5a7485; --water:#0a84b8;
-  --l0:#1f9d63; --l1:#d9a400; --l2:#ea6a12; --l3:#e03347; --l4:#d4145a; --lx:#8aa0ad;
+  --l0:#1f9d63; --l1:#d9a400; --l2:#ea6a12; --l3:#e03347; --l4:#d4145a; --lx:#1a1a1a;
   --r:14px;
   font-family:"IBM Plex Sans Thai",system-ui,sans-serif;
 }
@@ -185,7 +185,7 @@ const LEVELS = [
   {name:"วิกฤต",      color:"var(--l3)", hex:"#e03347"},
   {name:"น้ำท่วมขัง",  color:"var(--l4)", hex:"#d4145a"},
 ];
-const NODATA = {name:"ข้อมูลไม่พอ", color:"var(--lx)", hex:"#8aa0ad"};
+const NODATA = {name:"ไม่มีข้อมูล", color:"var(--lx)", hex:"#1a1a1a"};
 const ACCESS = {
   normal:{t:"เข้าได้ปกติ"}, high_vehicle:{t:"รถยกสูงเข้าได้"},
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
@@ -279,7 +279,7 @@ function drawMap(){
   const counts = [0,0,0,0,0], nod = {n:0};
   stations.forEach(s => { const lv = levelOf(s); lv<0 ? nod.n++ : counts[lv]++; });
   $("#strip").innerHTML = [4,3,2,1].map(i => `<span class="chip"><span class="dot" style="background:${LEVELS[i].hex}"></span>${LEVELS[i].name} ${counts[i]}</span>`).join("")
-    + (nod.n ? `<span class="chip"><span class="dot" style="background:${NODATA.hex}"></span>ไม่มีข้อมูล ${nod.n}</span>` : "");
+    + (nod.n ? `<span class="chip"><span class="dot" style="background:${NODATA.hex}"></span>${NODATA.name} ${nod.n}</span>` : "");
 }
 
 /* ============ LIST ============ */
@@ -461,7 +461,7 @@ function drawGuide(){
     ["การเข้าถึงสถานี","แอป FloodEye","เจ้าหน้าที่หน้างาน","เมื่อมีการอัปเดต"]])}</div>
 
   <div class="card"><h3>ฝนสะสม 24 ชั่วโมง (สูงสุด 65 คะแนน)</h3>
-    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 15 กม. หากยังไม่มีสถานีวัดฝน ระดับน้ำ และจุดแจ้งน้ำท่วมเลย จะแสดงเป็น "ข้อมูลไม่พอ" แทน "ปกติ"</p>
+    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 15 กม. หากยังไม่มีสถานีวัดฝน ระดับน้ำ และจุดแจ้งน้ำท่วมเลย จะแสดงเป็น "ไม่มีข้อมูล" (สีดำ) แทน "ปกติ"</p>
     ${gtable(["ปริมาณฝน (มม.)","คะแนน"],[["150 ขึ้นไป","65"],["120–149","55"],["90–119","45"],["60–89","30"],["35–59","15"],["10–34","5"],["น้อยกว่า 10","0"]])}</div>
 
   <div class="card"><h3>ระดับน้ำคลอง/แม่น้ำ (สูงสุด 35 คะแนน)</h3>
