@@ -183,9 +183,10 @@ const SEED = [
 ];
 
 /* ============ STATE ============ */
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
+// ใช้ app ชื่อ "floodeye" แยก session login ออกจาก MotorEye (โปรเจกต์/โดเมนเดียวกัน)
+const fbApp = firebase.initializeApp(firebaseConfig, "floodeye");
+const db = fbApp.firestore();
+const auth = fbApp.auth();
 let user = null, stations = [], reports = [], filter = "all", openId = null;
 let demo = localStorage.getItem("fe_demo") === "1";
 const $ = s => document.querySelector(s);
