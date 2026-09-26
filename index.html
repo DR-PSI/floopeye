@@ -100,6 +100,16 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .card ul{margin:0;padding-left:18px;line-height:1.8;font-size:14px}
 .drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:18px;text-align:center;margin-top:12px}
 .drop img{max-width:100%;max-height:220px;border-radius:8px;margin-top:10px}
+.guide h2{font-size:20px;margin:0 0 6px}
+.guide h3{font-size:16px;margin:0 0 8px}
+.guide p{font-size:14px;line-height:1.7;margin:0 0 8px}
+.gt{width:100%;border-collapse:collapse;font-size:14px;margin:4px 0 6px}
+.gt th{background:var(--water);color:#fff;text-align:left;font-weight:600;padding:7px 10px}
+.gt td{border-bottom:1px solid var(--line);padding:7px 10px;vertical-align:top}
+.gt td:first-child{font-weight:500}
+.gt-wrap{overflow-x:auto}
+.guide ol,.guide ul{margin:0;padding-left:20px;font-size:14px;line-height:1.8}
+.lv-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1000;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
@@ -127,6 +137,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
     <div id="list"></div>
   </div></section>
   <section class="view" id="v-report"><div class="pad" id="report"></div></section>
+  <section class="view" id="v-guide"><div class="pad guide" id="guide"></div></section>
   <section class="view" id="v-settings"><div class="pad" id="settings"></div></section>
 </main>
 
@@ -134,6 +145,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
   <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
+  <button data-v="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M9 7h6"/></svg>คู่มือ</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
 
@@ -399,6 +411,74 @@ async function readInfographic(){
   }
 }
 
+
+/* ============ GUIDE ============ */
+function gtable(head, rows){ return `<div class="gt-wrap"><table class="gt"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }
+function drawGuide(){
+  const dot = i => `<span class="lv-dot" style="background:${LEVELS[i].hex}"></span>`;
+  $("#guide").innerHTML = `
+  <div class="rep-head"><h2>FloodEye ทำงานอย่างไร</h2>
+    <p style="margin:0">FloodEye ประเมินความเสี่ยงน้ำท่วมของสถานีไฟฟ้าโดยไม่ต้องติดตั้งเซนเซอร์ที่สถานี ระบบดึงข้อมูลสาธารณะจากหน่วยงานภายนอกทุก 15 นาที นำมาจับคู่กับพิกัดของแต่ละสถานี แล้วคำนวณเป็นคะแนนความเสี่ยง 0–100 คะแนน</p></div>
+
+  <div class="card"><h3>แหล่งข้อมูล</h3>${gtable(["ข้อมูล","แหล่ง","หน่วยงาน","ความถี่"],[
+    ["ฝนสะสม 24 ชม.","ThaiWater","สสน. รวมข้อมูลจากสถานีโทรมาตรหลายหน่วยงาน","ทุก 15 นาที"],
+    ["ระดับน้ำคลอง/แม่น้ำ","ThaiWater","สสน.","ทุก 15 นาที"],
+    ["ประชาชนแจ้งน้ำท่วม","Traffy Fondue","NECTEC (สวทช.) ร่วมกับ กทม.","ทุก 15 นาที"],
+    ["การเข้าถึงสถานี","แอป FloodEye","เจ้าหน้าที่หน้างาน","เมื่อมีการอัปเดต"]])}</div>
+
+  <div class="card"><h3>ฝนสะสม 24 ชั่วโมง (สูงสุด 65 คะแนน)</h3>
+    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 8 กม.</p>
+    ${gtable(["ปริมาณฝน (มม.)","คะแนน"],[["150 ขึ้นไป","65"],["120–149","55"],["90–119","45"],["60–89","30"],["35–59","15"],["10–34","5"],["น้อยกว่า 10","0"]])}</div>
+
+  <div class="card"><h3>ระดับน้ำคลอง/แม่น้ำ (สูงสุด 35 คะแนน)</h3>
+    <p>ใช้สถานีวัดระดับน้ำที่ใกล้ที่สุดในรัศมี 5 กม. คิดเป็นร้อยละเทียบความสูงตลิ่ง โดย 0% คือท้องคลอง และ 100% คือระดับเสมอตลิ่ง</p>
+    ${gtable(["ระดับน้ำ (% ความสูงตลิ่ง)","คะแนน"],[["100 ขึ้นไป (ล้นตลิ่ง)","35"],["90–99","25"],["80–89","15"],["70–79","6"],["น้อยกว่า 70","0"]])}</div>
+
+  <div class="card"><h3>ประชาชนแจ้งน้ำท่วม (สูงสุด 30 คะแนน)</h3>
+    <p>นับเรื่องแจ้งผ่าน Traffy Fondue ที่มีคำว่า "ท่วม" ในประเภทปัญหาหรือรายละเอียด อยู่ในรัศมี 1.5 กม. และแจ้งภายใน 6 ชั่วโมงล่าสุด ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
+    <p style="margin:0"><b>คะแนนรวม = คะแนนฝน + คะแนนระดับน้ำ + คะแนนแจ้งน้ำท่วม</b> (สูงสุด 100 คะแนน)</p></div>
+
+  <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
+    ["0–24",dot(0)+"ปกติ","–"],
+    ["25–49",dot(1)+"เฝ้าระวัง","ติดตามสถานการณ์"],
+    ["50–74",dot(2)+"เสี่ยงสูง","เตรียมพร้อม แจ้งเตือนกลุ่ม LINE"],
+    ["75–100",dot(3)+"วิกฤต","ควรส่งเจ้าหน้าที่ตรวจหน้างาน แจ้งเตือนกลุ่ม LINE"]])}</div>
+
+  <div class="card"><h3>ตัวอย่างการคำนวณ (26 กันยายน 2569)</h3>${gtable(["สถานี","ฝน","ระดับน้ำ","แจ้งน้ำท่วม","รวม"],[
+    ["ย่อยดอนเมือง","173 มม. = 65","สูง = 35","5 จุด = 30","100 วิกฤต"],
+    ["ย่อยคลองร้อย","177 มม. = 65","ไม่มีสถานีวัด = 0","0 จุด = 0","65 เสี่ยงสูง"]])}
+    <p style="margin:0">ในวันดังกล่าว รายงาน กฟน. เวลา 13.30 น. และ 18.00 น. ยืนยันน้ำท่วมขังทั้ง 6 สถานีที่ติดตาม ขณะที่ฝนสะสม 24 ชม. รอบสถานีอยู่ระหว่าง 132–177 มม. ข้อมูลนี้ใช้ปรับเกณฑ์คะแนนฝนครั้งแรก</p></div>
+
+  <div class="card"><h3>ที่มาของเกณฑ์คะแนน</h3>${gtable(["ส่วน","ที่มา"],[
+    ["ช่วงฝน 10 / 35 / 90 มม.","อิงเกณฑ์ปริมาณฝน 24 ชม. ของกรมอุตุนิยมวิทยา: เล็กน้อย 0.1–10, ปานกลาง 10.1–35, หนัก 35.1–90, หนักมาก 90.1 ขึ้นไป"],
+    ["ช่วงฝน 120 / 150 มม.","เพิ่มจากเหตุการณ์ 26 ก.ย. 69 (ฝน 132–177 มม. เริ่มท่วม)"],
+    ["ระดับน้ำ 70 / 80 / 90 / 100%","ใกล้เคียงการแบ่งสถานการณ์ระดับน้ำของ ThaiWater ที่ 70–100% = น้ำมาก และเกิน 100% = ล้นตลิ่ง ช่วงย่อย 80 และ 90% แบ่งเพิ่มเอง"],
+    ["Traffy จุดละ 8 สูงสุด 30","กำหนดเอง ไม่มีเกณฑ์อ้างอิง"],
+    ["น้ำหนัก ฝน 65 / ระดับน้ำ 35 / Traffy 30","กำหนดเอง โดยให้ฝนมีน้ำหนักมากสุดเพราะมีข้อมูลครอบคลุมทุกสถานี"],
+    ["รัศมี 3 / 5 / 1.5 กม.","กำหนดเอง ตามระยะที่คิดว่าเหตุการณ์ยังส่งผลถึงสถานี"],
+    ["ระดับ 25 / 50 / 75","แบ่ง 100 คะแนนเป็น 4 ช่วงเท่ากัน"]])}</div>
+
+  <div class="card"><h3>ขั้นตอนการทำงาน (ทุก 15 นาที)</h3><ol>
+    <li>อ่านรายชื่อและพิกัดสถานีไฟฟ้าจากฐานข้อมูล</li>
+    <li>ดึงข้อมูลฝนสะสม 24 ชั่วโมง และระดับน้ำคลอง/แม่น้ำ จาก ThaiWater</li>
+    <li>ดึงเรื่องแจ้งน้ำท่วมจาก Traffy Fondue</li>
+    <li>คำนวณคะแนนความเสี่ยงของแต่ละสถานีตามเกณฑ์ข้างต้น</li>
+    <li>บันทึกคะแนนลงฐานข้อมูล แอปแสดงผลใหม่ทันทีโดยไม่ต้องโหลดหน้าใหม่</li>
+    <li>หากสถานีใดเพิ่มระดับเป็นเสี่ยงสูงหรือวิกฤต ส่งแจ้งเตือนเข้ากลุ่ม LINE</li></ol>
+    <p style="margin:8px 0 0">หากแหล่งข้อมูลใดไม่ตอบสนอง ระบบจะข้ามแหล่งนั้นและคำนวณจากแหล่งที่เหลือ หากดึงข้อมูลไม่ได้ทุกแหล่ง ระบบจะคงค่าเดิมไว้ ไม่เขียนทับ</p></div>
+
+  <div class="card"><h3>สิทธิ์การใช้งาน</h3>${gtable(["การใช้งาน","เงื่อนไข"],[
+    ["ดูแผนที่ สถานี รายงาน และคู่มือ","ทุกคนที่มีลิงก์"],
+    ["อัปเดตสถานะ แก้พิกัด เพิ่มสถานี","เข้าสู่ระบบด้วยบัญชี Google"],
+    ["เข้าหน้าตั้งค่า","ต้องใส่รหัสผ่าน"]])}</div>
+
+  <div class="card"><h3>ข้อจำกัด</h3><ul>
+    <li><b>ประเมินความเสี่ยงรอบสถานี:</b> ไม่ได้วัดระดับน้ำภายในรั้วสถานีโดยตรง</li>
+    <li><b>ระดับน้ำคลอง:</b> บางสถานีไม่มีสถานีวัดในรัศมี 5 กม. เช่น สถานีย่อยคลองร้อย คะแนนจึงมาจากฝนเป็นหลัก</li>
+    <li><b>Traffy Fondue:</b> ครอบคลุมพื้นที่กรุงเทพฯ ได้ดี แต่ปริมณฑลมีการแจ้งน้อยกว่า และเป็นข้อมูลที่ประชาชนแจ้งเองโดยยังไม่ผ่านการตรวจสอบ</li>
+    <li><b>ยังไม่รวม:</b> ข้อมูลเซนเซอร์น้ำท่วมถนนของสำนักการระบายน้ำ กทม. (รอ API หรือติดตั้งเซนเซอร์เอง) และฝนพยากรณ์ล่วงหน้า</li></ul></div>`;
+}
+
 /* ============ SETTINGS ============ */
 function drawSettings(){
   $("#settings").innerHTML = `
@@ -478,7 +558,7 @@ $("#authBtn").onclick = async () => {
 auth.onAuthStateChanged(u => { user = u; $("#authBtn").textContent = u ? "ออกจากระบบ" : "เข้าสู่ระบบ"; renderAll(); });
 
 function renderAll(){
-  drawMap(); drawList(); drawReport(); drawSettings(); if(openId) drawSheet();
+  drawMap(); drawList(); drawReport(); drawGuide(); drawSettings(); if(openId) drawSheet();
   const latest = stations.map(s=>s.risk?.updatedAt).filter(Boolean).sort().pop();
   $("#updated").innerHTML = latest ? `ประเมินล่าสุด<br>${thTime(latest)}` : (demo ? "โหมดตัวอย่าง" : "รอข้อมูลจาก n8n");
 }
