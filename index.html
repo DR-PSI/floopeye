@@ -285,7 +285,7 @@ function drawMap(){
   const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
   stations.forEach(s => counts[levelOf(s)]++);
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
-  $("#strip").innerHTML = [4,3,2,1].map(i => chip(i, LEVELS[i])).join("") + (counts["-1"] ? chip(-1, NODATA) : "");
+  $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA);
 }
 $("#strip").addEventListener("click", e => {
   const b = e.target.closest("button[data-lv]"); if(!b) return;
