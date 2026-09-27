@@ -446,8 +446,8 @@ function drawList(){
     const mt = [];
     if(nd) mt.push(r ? "ไม่มีสถานีวัดในรัศมี 15 กม." : "รอข้อมูลจาก n8n");
     else {
-      mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.`);
-      if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>`);
+      mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.${r.rainStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
+      if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>${r.wlStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
       const n = rp(s); if(n) mt.push(`แจ้งน้ำท่วม <b>${n}</b> จุด`);
     }
     if(s.lat == null) mt.push("ยังไม่ปักหมุด");
@@ -480,8 +480,8 @@ function drawSheet(){
     </div>
     ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
     <div class="kv">
-      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:(r&&r.rain24h==null?" · ไม่มีสถานีวัดใกล้":"")}</span></div>
-      <div><b>${r?.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
+      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainStale?` · ⏱ ค่าจากรอบก่อน (${thTime(r.rainAt)})`:""}${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:(r&&r.rain24h==null?" · ไม่มีสถานีวัดใกล้":"")}</span></div>
+      <div><b>${r?.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStale?` · ⏱ ค่าจากรอบก่อน (${thTime(r.wlAt)})`:""}${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
       <div><b>${r ? (r.traffyCount||0)+(r.longdoCount||0) : "-"}</b><span>จุดแจ้งน้ำท่วม Traffy + Longdo (1.5 กม.)</span></div>
       <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
     </div>
