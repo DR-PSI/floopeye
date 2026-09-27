@@ -187,7 +187,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
   <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
-  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>เหตุการณ์</button>
+  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Grid Events</button>
   <button data-v="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M9 7h6"/></svg>คู่มือ</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
@@ -443,7 +443,7 @@ function drawSheet(){
         <p style="margin:8px 0 2px"><span class="lvl" style="background:${cols[c.level]??"#8aa0ad"}">AI: ${names[c.level]??"-"}</span>
         ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
         <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
-    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>เหตุการณ์ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</li>`).join("")}</ul></div>` : ""; })()}
+    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</li>`).join("")}</ul></div>` : ""; })()}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
@@ -559,7 +559,7 @@ function drawEvents(){
   const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
   const list = evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter);
   $("#events").innerHTML = `
-    <div class="rep-head"><h2>เหตุการณ์ใกล้สถานีไฟฟ้า</h2>
+    <div class="rep-head"><h2>FloodEye — Grid Events</h2>
       <div class="note">24 ชั่วโมงล่าสุด · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div></div>
     <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}</div>
     ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
@@ -600,7 +600,7 @@ function drawGuide(){
     <p>นับจุดแจ้งน้ำท่วมในรัศมี 1.5 กม. จาก 2 แหล่ง: Traffy Fondue (เรื่องที่มีคำว่า "ท่วม" แจ้งภายใน 6 ชั่วโมง) และ Longdo Traffic / กรมทางหลวง (รายงานน้ำท่วมที่ยังไม่หมดเวลา) ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
     <p style="margin:0"><b>คะแนนรวม = คะแนนฝน + คะแนนระดับน้ำ + คะแนนแจ้งน้ำท่วม</b> (สูงสุด 100 คะแนน)</p></div>
 
-  <div class="card"><h3>เหตุการณ์ใกล้สถานี (ไม่นำมาคิดคะแนนน้ำท่วม)</h3>
+  <div class="card"><h3>Grid Events: เหตุการณ์ใกล้สถานี (ไม่นำมาคิดคะแนนน้ำท่วม)</h3>
     <p>ทุก 15 นาที ระบบรวบรวมเหตุการณ์ 24 ชั่วโมงล่าสุดที่เกี่ยวกับระบบไฟฟ้า และระบุสถานีที่ใกล้ที่สุด แสดงเป็นไอคอนบนแผนที่ ในแท็บเหตุการณ์ และในหน้ารายละเอียดสถานี</p>
     ${gtable(["เหตุการณ์","แหล่ง","รัศมี"],[
       ["⚡ สายไฟ/ไฟฟ้า (สายหย่อน เสาเอียง ไฟฟ้าลัดวงจร หม้อแปลง ไฟดับ)","Traffy Fondue, Longdo Traffic","2 กม."],
