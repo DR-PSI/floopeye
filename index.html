@@ -75,8 +75,8 @@ nav button.on{color:var(--water)}
 .filters button.on{border-color:var(--water);color:var(--water)}
 
 /* sheet */
-.sheet-bg{position:fixed;inset:0;background:rgba(15,42,58,.35);z-index:900;display:none}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:901;background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(15,42,58,.15);max-height:86vh;overflow:auto;transform:translateY(100%);transition:transform .25s ease;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sheet-bg{position:fixed;inset:0;background:rgba(15,42,58,.35);z-index:1099;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:1100;background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(15,42,58,.15);max-height:86vh;overflow:auto;transform:translateY(100%);transition:transform .25s ease;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px))}
 .sheet.on{transform:none}
 .sheet-bg.on{display:block}
 .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
@@ -148,7 +148,14 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .evrow .t{font-weight:600;font-size:14.5px}
 .evrow .m{font-size:12.5px;color:var(--muted);margin-top:2px}
 .evrow a{color:var(--water)}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1000;font-size:14px;display:none;max-width:90vw}
+.modes{position:absolute;z-index:500;right:12px;top:58px;display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 1px 4px rgba(15,42,58,.12)}
+.modes button{border:0;background:none;border-radius:8px;padding:6px 10px;font-size:13px;text-align:left;font-family:inherit;color:var(--text);cursor:pointer}
+.modes button.on{background:#e1f1f9;color:#075f86;font-weight:600}
+.wxg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media (max-width:560px){.wxg{grid-template-columns:1fr}}
+.wxc{background:var(--panel2);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:9px 10px;font-size:13px}
+.wxc b{display:block;font-size:14px;margin-bottom:2px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
 .pin.pulse{position:relative}
@@ -171,7 +178,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 </header>
 
 <main>
-  <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div></section>
+  <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div><div class="modes" id="modes"></div></section>
   <section class="view" id="v-list"><div class="pad" style="max-width:1200px">
     <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
     <div class="filters" id="filters"></div>
@@ -227,6 +234,12 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อน"}, insulator:{ic:"🧂", name:"ลูกถ้วย (เค็ม/ฝุ่น)"}};
+let mapMode = localStorage.getItem("fe_mode") || "flood";
+function wxTip(s, mode){ const w = s.weather?.[mode]; if(!w) return "";
+  if(mode==="storm") return `<div>ฝน 3 ชม.ข้างหน้า ${w.rain3h ?? "-"} มม. · ลมกระโชก ${w.gustMax ?? "-"} กม./ชม.</div><div>${w.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${w.cape!=null?` · CAPE ${w.cape}`:""}</div>`;
+  if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C</div>`;
+  return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
 const EVK = {wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
 let gridEvents = [], evFilter = "all";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
@@ -273,6 +286,7 @@ function riskOf(s){
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
 const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
+const mapLevel = s => mapMode === "flood" ? levelOf(s) : (s.weather?.[mapMode]?.level ?? -1);
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
 function levelOf(s){
@@ -308,16 +322,17 @@ function drawMap(){
   for(const s of stations){
     if(s.lat == null || s.lng == null) continue;
     pts.push([s.lat,s.lng]);
-    const lv = levelOf(s); if(hiddenLv.has(lv)) continue;
+    const lv = mapLevel(s); if(hiddenLv.has(lv)) continue;
     const c = LV(lv).hex, size = Math.round(BASE_SIZE[lv] * k);
     const icon = window.L.divIcon({className:"", iconSize:[size,size],
       html:`<div class="pin ${lv>=3?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
     const mk = window.L.marker([s.lat,s.lng],{icon, zIndexOffset:(lv+1)*1000}).addTo(map);
     const r = riskOf(s), lvl = LV(lv);
-    mk.bindTooltip(`<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
+    mk.bindTooltip(mapMode === "flood" ? `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
       <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
       ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด</div>`:""}
-      <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`,
+      <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`
+      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${s.weather?.updatedAt ? "อัปเดต "+thTime(s.weather.updatedAt) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
@@ -334,11 +349,12 @@ function drawMap(){
   if(pts.length && !drawMap._fit){ drawMap._fit = true; fitStations(pts); }
   // summary strip — กดเพื่อซ่อน/แสดง
   const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
-  stations.forEach(s => counts[levelOf(s)]++);
+  stations.forEach(s => counts[mapLevel(s)]++);
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
   const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
   $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
     + Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join("");
+  $("#modes").innerHTML = Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("");
 }
 $("#strip").addEventListener("click", e => {
   const be = e.target.closest("button[data-ev]");
@@ -361,6 +377,7 @@ const FitCtl = window.L.Control.extend({ options:{position:"bottomright"},
     window.L.DomEvent.on(b,"click",e=>{ window.L.DomEvent.stop(e); fitStations(stations.filter(s=>s.lat!=null).map(s=>[s.lat,s.lng])); }); return b; } });
 new FitCtl().addTo(map);
 map.on("zoomend", () => drawMap());
+$("#modes").addEventListener("click", e => { const b = e.target.closest("button[data-mode]"); if(!b) return; mapMode = b.dataset.mode; localStorage.setItem("fe_mode", mapMode); drawMap(); });
 
 /* ============ LIST ============ */
 let listQ = "", listSort = "score";
@@ -444,6 +461,13 @@ function drawSheet(){
         ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
         <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</li>`).join("")}</ul></div>` : ""; })()}
+    ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
+      const st=w.storm||{}, ht=w.heat||{}, ins=w.insulator||{};
+      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
+        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}</div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อน 24 ชม. · ${L3(ht.level).name}</b>สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}</div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ลูกถ้วย · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}</div>
+      </div></div>`; })():""}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
@@ -607,6 +631,14 @@ function drawGuide(){
       ["🔥 ไฟไหม้","Longdo Traffic","2 กม."],
       ["〰️ แผ่นดินไหว พร้อมรายการสถานีที่ควรตรวจ","Longdo Traffic","30 กม."]])}
     <p style="margin:0">ไม่รวมไฟส่องสว่างถนน ซึ่งเป็นความรับผิดชอบของ กทม.</p></div>
+
+  <div class="card"><h3>ความเสี่ยงจากสภาพอากาศ (เลือกดูได้ที่ปุ่มมุมขวาบนของแผนที่)</h3>
+    <p>อัปเดตทุก 1 ชั่วโมงจาก Open-Meteo (พยากรณ์อากาศและคุณภาพอากาศ) แยกจากคะแนนน้ำท่วม</p>
+    ${gtable(["ความเสี่ยง","เฝ้าระวัง","เสี่ยงสูง","วิกฤต"],[
+      ["⛈️ พายุ/ฟ้าผ่า (3 ชม.ข้างหน้า)","ฝน ≥5 มม. หรือลม ≥35 กม./ชม. หรือ CAPE ≥1500","พายุฝนฟ้าคะนอง หรือฝน ≥20 มม. หรือลม ≥50","พายุฝนฟ้าคะนอง ร่วมกับฝน ≥20 มม. หรือลม ≥60"],
+      ["🌡️ ความร้อน (24 ชม.)","สูงสุด ≥36°C หรือ ≥35°C และกลางคืน ≥29°C","สูงสุด ≥38°C","สูงสุด ≥40°C"],
+      ["🧂 ลูกถ้วย (เกลือ/ฝุ่น)","รวมคะแนน 1","รวมคะแนน 2","รวมคะแนน 3"]])}
+    <p style="margin:0">ลูกถ้วย: PM2.5 ≥75 = 2, ≥50 = 1 · ห่างทะเล ≤5 กม. = 2, ≤10 กม. = 1 · ฤดูแล้ง (ธ.ค.–พ.ค.) ใกล้ทะเล +1 · ความชื้น ≥90% (หมอก/น้ำค้างทำให้คราบนำไฟฟ้า) +1 ยังไม่มีข้อมูลความเค็มโดยตรง ใช้ระยะจากทะเลแทน</p></div>
 
   <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
     ["0–24",dot(0)+"ปกติ","–"],
