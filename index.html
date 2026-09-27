@@ -301,7 +301,7 @@ function drawMap(){
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
   }
-  if(pts.length && !drawMap._fit){ drawMap._fit = true; map.fitBounds(pts,{padding:[60,60],maxZoom:12}); }
+  if(pts.length && !drawMap._fit){ drawMap._fit = true; fitStations(pts); }
   // summary strip — กดเพื่อซ่อน/แสดง
   const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
   stations.forEach(s => counts[levelOf(s)]++);
@@ -313,6 +313,19 @@ $("#strip").addEventListener("click", e => {
   const lv = +b.dataset.lv; hiddenLv.has(lv) ? hiddenLv.delete(lv) : hiddenLv.add(lv);
   localStorage.setItem("fe_hidden", JSON.stringify([...hiddenLv])); drawMap();
 });
+// จัดมุมมองให้เห็นทุกสถานีใน กทม. นนทบุรี สมุทรปราการ (ตัดพิกัดที่หลุดพื้นที่ออก)
+function fitStations(pts){
+  const inArea = pts.filter(([la,ln]) => la>13.3 && la<14.3 && ln>100.2 && ln<101.1);
+  const use = inArea.length ? inArea : pts;
+  map.invalidateSize();
+  map.fitBounds(use, {padding:[60,60], maxZoom:12});
+  if(map.getZoom() < 9) map.setView([13.76,100.62], 10);
+}
+const FitCtl = window.L.Control.extend({ options:{position:"bottomright"},
+  onAdd(){ const b = window.L.DomUtil.create("button","btn sm"); b.title="แสดงทุกสถานี"; b.textContent="⤢ ทุกสถานี";
+    b.style.cssText="background:#fff;border:1px solid var(--line);box-shadow:0 1px 4px rgba(15,42,58,.15)";
+    window.L.DomEvent.on(b,"click",e=>{ window.L.DomEvent.stop(e); fitStations(stations.filter(s=>s.lat!=null).map(s=>[s.lat,s.lng])); }); return b; } });
+new FitCtl().addTo(map);
 map.on("zoomend", () => drawMap());
 
 /* ============ LIST ============ */
