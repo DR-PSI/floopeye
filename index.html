@@ -242,6 +242,7 @@ function wxTip(s, mode){ const w = s.weather?.[mode]; if(!w) return "";
   return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
 const EVK = {wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
 let gridEvents = [], evFilter = "all";
+let showEv = localStorage.getItem("fe_show_ev") === "1";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
 const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
 const recentEvents = () => gridEvents.filter(e => Date.now() - new Date(e.at).getTime() < 24*36e5);
@@ -337,7 +338,7 @@ function drawMap(){
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
   }
-  for(const e of recentEvents()){
+  for(const e of (showEv ? recentEvents() : [])){
     if(hiddenEv.has(e.kind) || e.lat == null) continue;
     const K = EVK[e.kind] || EVK.wire, sz = Math.round(20 * Math.min(k, 1.3));
     const mk = window.L.marker([e.lat, e.lng], {zIndexOffset: 6000, icon: window.L.divIcon({className:"", iconSize:[sz,sz],
@@ -353,7 +354,7 @@ function drawMap(){
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
   const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
   $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
-    + Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join("");
+    + (!showEv ? "" : Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join(""));
   $("#modes").innerHTML = Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("");
 }
 $("#strip").addEventListener("click", e => {
@@ -710,6 +711,9 @@ function drawSettings(){
     <div class="card"><h3>การเชื่อมต่อ n8n</h3>
       <label for="wh">Webhook base URL</label><input type="url" id="wh" value="${esc(webhook())}">
       <button class="btn" style="margin-top:8px" onclick="localStorage.setItem('fe_webhook',$('#wh').value.trim());toast('บันทึกแล้ว')">บันทึก</button></div>
+    <div class="card"><h3>Grid Events บนแผนที่</h3>
+      <p class="note">แสดงไอคอน ⚡ สายไฟ/ไฟฟ้า · 🔥 ไฟไหม้ · 〰️ แผ่นดินไหว บนแผนที่ และป้ายนับจำนวนที่แถบด้านบน (แท็บ Grid Events ยังดูได้ตามปกติ)</p>
+      <button class="btn ${showEv?"pri":""}" onclick="toggleEv()">${showEv?"เปิดอยู่ · กดเพื่อปิด":"ปิดอยู่ · กดเพื่อเปิด"}</button></div>
     <div class="card"><h3>โหมดตัวอย่าง</h3>
       <p class="note">แสดงคะแนนเสี่ยงจำลองกับสถานีที่ยังไม่มีข้อมูลจริง ใช้ทดสอบหน้าจอก่อนเปิด workflow เก็บข้อมูล ค่าจำลองไม่ถูกบันทึกลงฐานข้อมูล</p>
       <button class="btn" onclick="toggleDemo()">${demo?"ปิดโหมดตัวอย่าง":"เปิดโหมดตัวอย่าง"}</button></div>
@@ -819,6 +823,7 @@ function exportStations(){
   setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
   toast(`ส่งออก ${stations.length} สถานีแล้ว ดูไฟล์ในโฟลเดอร์ Downloads`);
 }
+function toggleEv(){ showEv = !showEv; localStorage.setItem("fe_show_ev", showEv ? "1" : "0"); drawMap(); drawSettings(); }
 function toggleDemo(){ demo=!demo; localStorage.setItem("fe_demo",demo?"1":"0"); renderAll(); }
 async function addStation(){
   const name = $("#nName").value.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"").trim();
