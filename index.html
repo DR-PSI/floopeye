@@ -148,6 +148,8 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .evrow .t{font-weight:600;font-size:14.5px}
 .evrow .m{font-size:12.5px;color:var(--muted);margin-top:2px}
 .evrow a{color:var(--water)}
+.evph{display:block;max-width:100%;width:260px;max-height:180px;object-fit:cover;border-radius:8px;margin-top:6px;border:1px solid var(--line);background:#eef2f6}
+.evph.sm{width:120px;max-height:84px}
 .modes{position:absolute;z-index:500;right:12px;top:58px;display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 1px 4px rgba(15,42,58,.12)}
 .modes button{border:0;background:none;border-radius:8px;padding:6px 10px;font-size:13px;text-align:left;font-family:inherit;color:var(--text);cursor:pointer}
 .modes button.on{background:#e1f1f9;color:#075f86;font-weight:600}
@@ -264,8 +266,9 @@ function wxTip(s, mode){ const w = s.weather?.[mode]; if(!w) return "";
   if(mode==="storm") return `<div>ฝน 3 ชม.ข้างหน้า ${w.rain3h ?? "-"} มม. · ลมกระโชก ${w.gustMax ?? "-"} กม./ชม.</div><div>${w.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${w.cape!=null?` · CAPE ${w.cape}`:""}</div>`;
   if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C</div>`;
   return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
-const EVK = {wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
-let gridEvents = [], evFilter = "all";
+const EVK = {flood:{name:"น้ำท่วม", ic:"🌊", hex:"#0284c7"}, wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
+let gridEvents = [], evFilter = "all", evPhotoOnly = false;
+const evPhoto = (e, big) => e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
 let showEv = localStorage.getItem("fe_show_ev") === "1";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
 const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
@@ -490,7 +493,7 @@ function drawSheet(){
         <p style="margin:8px 0 2px"><span class="lvl" style="background:${cols[c.level]??"#8aa0ad"}">AI: ${names[c.level]??"-"}</span>
         ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
         <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
-    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</li>`).join("")}</ul></div>` : ""; })()}
+    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
     ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
       const st=w.storm||{}, ht=w.heat||{}, ins=w.insulator||{};
       return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
@@ -611,20 +614,22 @@ function drawEvents(){
   const ev = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
   const cnt = k => ev.filter(e => e.kind === k).length;
   const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
-  const list = evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter);
+  const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || e.photo);
   $("#events").innerHTML = `
     <div class="rep-head"><h2>FloodEye — Grid Events</h2>
-      <div class="note">24 ชั่วโมงล่าสุด · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div></div>
-    <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}</div>
+      <div class="note">24 ชั่วโมงล่าสุด · น้ำท่วมในรัศมี 5 กม. (เขต กฟน.) · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div></div>
+    <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}<button data-evp="1" class="${evPhotoOnly?"on":""}">📷 เฉพาะที่มีรูป</button></div>
     ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
       <div class="ic">${K.ic}</div><div style="flex:1;min-width:0">
         <div class="t">${esc(e.title)}</div>
-        <div class="m">${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</div>
+        <div class="m">${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}</div>
         <div class="m">ใกล้ <a href="#" onclick="openSheet('${esc(e.stationId)}');return false">${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)}</a> ${e.distKm} กม.</div>
         ${e.kind==="quake" && e.nearby?.length ? `<details style="margin-top:6px"><summary class="m" style="cursor:pointer"><b>สถานีที่ควรตรวจ ${e.nearby.length} แห่ง</b> (เรียงจากใกล้ไปไกล)</summary>
           <ol class="note" style="margin:6px 0 0;padding-left:20px">${e.nearby.map(x => `<li><a href="#" onclick="openSheet('${esc(x.id)}');return false">${esc(x.name)}</a> · ${x.distKm} กม.</li>`).join("")}</ol></details>` : ""}
-      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}ใกล้สถานีใน 24 ชม.</div>`}`;
+        ${evPhoto(e,true)}
+      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}${evPhotoOnly?"ที่มีรูป":""}ใกล้สถานีใน 24 ชม.</div>`}`;
   $("#events").querySelectorAll("button[data-evf]").forEach(b => b.onclick = () => { evFilter = b.dataset.evf; drawEvents(); });
+  $("#events").querySelector("button[data-evp]").onclick = () => { evPhotoOnly = !evPhotoOnly; drawEvents(); };
 }
 
 /* ============ GUIDE ============ */
@@ -657,6 +662,7 @@ function drawGuide(){
   <div class="card"><h3>Grid Events: เหตุการณ์ใกล้สถานี (ไม่นำมาคิดคะแนนน้ำท่วม)</h3>
     <p>ทุก 15 นาที ระบบรวบรวมเหตุการณ์ 24 ชั่วโมงล่าสุดที่เกี่ยวกับระบบไฟฟ้า และระบุสถานีที่ใกล้ที่สุด แสดงเป็นไอคอนบนแผนที่ ในแท็บเหตุการณ์ และในหน้ารายละเอียดสถานี</p>
     ${gtable(["เหตุการณ์","แหล่ง","รัศมี"],[
+      ["🌊 น้ำท่วม พร้อมรูปจากผู้แจ้ง (เฉพาะเขต กฟน.: กทม. นนทบุรี สมุทรปราการ)","Traffy Fondue, Longdo Traffic","5 กม."],
       ["⚡ สายไฟ/ไฟฟ้า (สายหย่อน เสาเอียง ไฟฟ้าลัดวงจร หม้อแปลง ไฟดับ)","Traffy Fondue, Longdo Traffic","2 กม."],
       ["🔥 ไฟไหม้","Longdo Traffic","2 กม."],
       ["〰️ แผ่นดินไหว พร้อมรายการสถานีที่ควรตรวจ","Longdo Traffic","30 กม."]])}
@@ -741,7 +747,7 @@ function drawSettings(){
       <label for="wh">Webhook base URL</label><input type="url" id="wh" value="${esc(webhook())}">
       <button class="btn" style="margin-top:8px" onclick="localStorage.setItem('fe_webhook',$('#wh').value.trim());toast('บันทึกแล้ว')">บันทึก</button></div>
     <div class="card"><h3>Grid Events บนแผนที่</h3>
-      <p class="note">แสดงไอคอน ⚡ สายไฟ/ไฟฟ้า · 🔥 ไฟไหม้ · 〰️ แผ่นดินไหว บนแผนที่ และป้ายนับจำนวนที่แถบด้านบน (แท็บ Grid Events ยังดูได้ตามปกติ)</p>
+      <p class="note">แสดงไอคอน 🌊 น้ำท่วม · ⚡ สายไฟ/ไฟฟ้า · 🔥 ไฟไหม้ · 〰️ แผ่นดินไหว บนแผนที่ และป้ายนับจำนวนที่แถบด้านบน (แท็บ Grid Events ยังดูได้ตามปกติ)</p>
       <button class="btn ${showEv?"pri":""}" onclick="toggleEv()">${showEv?"เปิดอยู่ · กดเพื่อปิด":"ปิดอยู่ · กดเพื่อเปิด"}</button></div>
     <div class="card"><h3>โหมดตัวอย่าง</h3>
       <p class="note">แสดงคะแนนเสี่ยงจำลองกับสถานีที่ยังไม่มีข้อมูลจริง ใช้ทดสอบหน้าจอก่อนเปิด workflow เก็บข้อมูล ค่าจำลองไม่ถูกบันทึกลงฐานข้อมูล</p>
@@ -913,7 +919,7 @@ function renderAll(){
 db.collection("flood_stations").onSnapshot(snap => {
   stations = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, _noname: !s.name, name: s.name || `(ไม่มีชื่อ: ${decodeURIComponent(s.id)})`})); renderAll();
 }, e => { $("#updated").textContent = "เชื่อมฐานข้อมูลไม่ได้"; toast(e.message); });
-db.collection("grid_events").orderBy("at","desc").limit(300).onSnapshot(snap => {
+db.collection("grid_events").orderBy("at","desc").limit(800).onSnapshot(snap => {
   gridEvents = snap.docs.map(d => ({id:d.id, ...d.data()})); drawMap(); drawEvents(); if(openId) drawSheet();
 }, () => {});
 db.collection("flood_reports").orderBy("receivedAt","desc").limit(5).onSnapshot(snap => {
