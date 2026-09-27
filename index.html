@@ -412,28 +412,26 @@ async function saveCoords(id){
 /* ============ REPORT ============ */
 let pendingImg = null;
 function drawReport(){
-  const counts=[0,0,0,0,0]; stations.forEach(s=>{const lv=levelOf(s); if(lv>=0) counts[lv]++;});
-  const conf = stations.filter(isConfirmed);
-  const watch = stations.filter(s => !isConfirmed(s) && levelOf(s) >= 2).sort((a,b)=>riskOf(b).score-riskOf(a).score);
-  const last = reports[0];
+  const groups = {3:[],2:[],1:[],0:[],"-1":[]};
+  stations.forEach(s => { const lv = levelOf(s); (groups[lv] || groups[3]).push(s); });
+  Object.values(groups).forEach(g => g.sort((a,b)=>((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th")));
+  const order = [3,2,1,0,-1], info = lv => lv<0 ? NODATA : LEVELS[lv];
+  const row = s => { const r = riskOf(s), a = accessOf(s), nd = !r || isNoData(r);
+    const bits = nd ? ["ไม่มีสถานีวัดใกล้"] : [`คะแนน ${r.score}`, `ฝน ${r.rain24h ?? "-"} มม.`];
+    if(!nd && r.wlPercent != null) bits.push(`น้ำคลอง ${Math.round(r.wlPercent)}%`);
+    const rc = r ? (r.traffyCount||0)+(r.longdoCount||0) : 0; if(rc) bits.push(`แจ้งน้ำท่วม ${rc} จุด`);
+    if(a && a.status && a.status!=="unknown") bits.push(ACCESS[a.status]?.t);
+    return `<li><a href="#" onclick="openSheet('${esc(s.id)}');return false" style="color:inherit">${esc(TYPE[s.type]||"")}${esc(s.name)}</a> <span class="note">· ${bits.map(esc).join(" · ")}</span></li>`; };
   $("#report").innerHTML = `
     <div class="rep-head"><h2>สถานการณ์น้ำท่วมสถานีไฟฟ้า</h2>
-      <div class="note">ณ ${thTime(new Date().toISOString())}</div>
-      <div class="rep-grid">${[4,3,2,1,0].map(i=>`<div><b style="color:${LEVELS[i].hex}">${counts[i]}</b><span>${LEVELS[i].name}</span></div>`).join("")}</div>
+      <div class="note">ณ ${thTime(new Date().toISOString())} · ทั้งหมด ${stations.length} สถานี</div>
+      <div class="rep-grid">${order.map(lv=>`<div><b style="color:${info(lv).hex}">${groups[lv].length}</b><span>${info(lv).name}</span></div>`).join("")}</div>
     </div>
-    <div class="card"><h3>สถานีที่มีน้ำท่วมขัง (ยืนยันแล้ว)</h3>
-      ${conf.length?`<ul>${conf.map(s=>{const a=accessOf(s);return `<li>${esc(TYPE[s.type]||"")}${esc(s.name)}${a&&a.status?` · ${ACCESS[a.status]?.t||""}`:""}${s.confirmed.accessNote?`<br><span class="note">${esc(s.confirmed.accessNote)}</span>`:""}</li>`}).join("")}</ul>`:`<p class="note">ไม่มีรายงานใน ${CONFIRM_TTL_H} ชม. ที่ผ่านมา</p>`}
-    </div>
-    <div class="card"><h3>สถานีเสี่ยงสูงจากข้อมูลรอบข้าง</h3>
-      ${watch.length?`<ul>${watch.map(s=>`<li>${esc(TYPE[s.type]||"")}${esc(s.name)} · คะแนน ${riskOf(s).score} · ฝน ${riskOf(s).rain24h??"-"} มม.</li>`).join("")}</ul>`:`<p class="note">ไม่มีสถานีระดับเสี่ยงสูงขึ้นไป</p>`}
-    </div>
-    ${last?`<div class="card"><h3>รายงาน กฟน. ล่าสุด · ${thTime(last.reportTime||last.receivedAt)}</h3>
-      <ul>
-        <li>ระบบส่ง: ${esc(last.transmission||"-")} / ระบบจำหน่าย: ${esc(last.distribution||"-")}</li>
-        ${(last.pumpOutages||[]).length?`<li>บ่อสูบน้ำไฟดับ: ${last.pumpOutages.map(esc).join(", ")}</li>`:""}
-        ${(last.unmatched||[]).length?`<li>ชื่อสถานีที่ยังไม่มีในระบบ (สร้างใหม่แล้ว รอปักหมุด): ${last.unmatched.map(esc).join(", ")}</li>`:""}
-        ${last.notes?`<li>${esc(last.notes)}</li>`:""}
-      </ul></div>`:""}`;
+    ${order.filter(lv => groups[lv].length).map(lv => `
+      <details class="card" ${lv>=2?"open":""}>
+        <summary style="cursor:pointer;font-weight:600;font-size:16px"><span class="dot" style="display:inline-block;background:${info(lv).hex};margin-right:6px"></span>${info(lv).name} (${groups[lv].length})</summary>
+        <ul style="margin-top:8px">${groups[lv].map(row).join("")}</ul>
+      </details>`).join("")}`;
 }
 function loadImage(file){
   if(!file) return;
