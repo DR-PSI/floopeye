@@ -142,6 +142,12 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .acc.no{background:#fde2e5;color:#b3182c}
 .filters button .n{opacity:.7;margin-left:4px}
 .filters .dot{margin-right:5px;vertical-align:-1px}
+.evpin{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:2px solid var(--ec);box-shadow:0 1px 4px rgba(15,42,58,.35);font-size:13px;line-height:1}
+.evrow{display:flex;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--ec);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.evrow .ic{font-size:20px;line-height:1.2}
+.evrow .t{font-weight:600;font-size:14.5px}
+.evrow .m{font-size:12.5px;color:var(--muted);margin-top:2px}
+.evrow a{color:var(--water)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1000;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
@@ -156,7 +162,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 <header>
   <div class="brand">
     <img src="logo-eye.png" alt="" width="46" height="29" style="display:block">
-    <div>FloodEye<small>ระบบเฝ้าระวังน้ำท่วมและระดับน้ำคลองที่ใกล้สถานีไฟฟ้า</small><small class="by">ฺBy Dr.Phanuphon S.</small></div>
+    <div>FloodEye<small>ระบบเฝ้าระวังน้ำท่วมและระดับน้ำคลองที่ใกล้สถานีไฟฟ้า</small><small class="by">By Dr.Phanuphon S.</small></div>
   </div>
   <div class="sp"></div>
   <div class="updated" id="updated">กำลังโหลด…</div>
@@ -172,6 +178,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
     <div id="list"></div>
   </div></section>
   <section class="view" id="v-report"><div class="pad" id="report"></div></section>
+  <section class="view" id="v-events"><div class="pad" style="max-width:900px" id="events"></div></section>
   <section class="view" id="v-guide"><div class="pad guide" id="guide"></div></section>
   <section class="view" id="v-settings"><div class="pad" id="settings"></div></section>
 </main>
@@ -180,6 +187,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
   <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
+  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>เหตุการณ์</button>
   <button data-v="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M9 7h6"/></svg>คู่มือ</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
@@ -219,6 +227,12 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
+const EVK = {wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
+let gridEvents = [], evFilter = "all";
+let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
+const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
+const recentEvents = () => gridEvents.filter(e => Date.now() - new Date(e.at).getTime() < 24*36e5);
+const eventsFor = s => recentEvents().filter(e => e.stationId === s.id || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === s.id)));
 
 /* สถานีจากรายงาน กฟน. 26 ก.ย. 2569 — พิกัดจาก Google Maps */
 const SEED = [
@@ -308,14 +322,27 @@ function drawMap(){
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
   }
+  for(const e of recentEvents()){
+    if(hiddenEv.has(e.kind) || e.lat == null) continue;
+    const K = EVK[e.kind] || EVK.wire, sz = Math.round(20 * Math.min(k, 1.3));
+    const mk = window.L.marker([e.lat, e.lng], {zIndexOffset: 6000, icon: window.L.divIcon({className:"", iconSize:[sz,sz],
+      html:`<div class="evpin" style="width:${sz}px;height:${sz}px;--ec:${K.hex}">${K.ic}</div>`})}).addTo(map);
+    mk.bindTooltip(`<div class="tip"><b>${K.ic} ${esc(e.title)}</b><div>${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}</div><div>ใกล้${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)} ${e.distKm} กม.</div></div>`, {direction:"top", offset:[0,-sz/2-2], opacity:1});
+    mk.on("click", () => openSheet(e.stationId));
+    markers["ev_"+e.id] = mk;
+  }
   if(pts.length && !drawMap._fit){ drawMap._fit = true; fitStations(pts); }
   // summary strip — กดเพื่อซ่อน/แสดง
   const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
   stations.forEach(s => counts[levelOf(s)]++);
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
-  $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA);
+  const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
+  $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
+    + Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join("");
 }
 $("#strip").addEventListener("click", e => {
+  const be = e.target.closest("button[data-ev]");
+  if(be){ const k = be.dataset.ev; hiddenEv.has(k) ? hiddenEv.delete(k) : hiddenEv.add(k); localStorage.setItem("fe_hidden_ev", JSON.stringify([...hiddenEv])); return drawMap(); }
   const b = e.target.closest("button[data-lv]"); if(!b) return;
   const lv = +b.dataset.lv; hiddenLv.has(lv) ? hiddenLv.delete(lv) : hiddenLv.add(lv);
   localStorage.setItem("fe_hidden", JSON.stringify([...hiddenLv])); drawMap();
@@ -416,6 +443,7 @@ function drawSheet(){
         <p style="margin:8px 0 2px"><span class="lvl" style="background:${cols[c.level]??"#8aa0ad"}">AI: ${names[c.level]??"-"}</span>
         ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
         <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
+    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>เหตุการณ์ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</li>`).join("")}</ul></div>` : ""; })()}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
@@ -524,6 +552,27 @@ async function readInfographic(){
 }
 
 
+/* ============ EVENTS ============ */
+function drawEvents(){
+  const ev = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  const cnt = k => ev.filter(e => e.kind === k).length;
+  const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
+  const list = evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter);
+  $("#events").innerHTML = `
+    <div class="rep-head"><h2>เหตุการณ์ใกล้สถานีไฟฟ้า</h2>
+      <div class="note">24 ชั่วโมงล่าสุด · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div></div>
+    <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}</div>
+    ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
+      <div class="ic">${K.ic}</div><div style="flex:1;min-width:0">
+        <div class="t">${esc(e.title)}</div>
+        <div class="m">${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${e.photo?` · <a href="${esc(e.photo)}" target="_blank" rel="noopener">ดูรูป</a>`:""}</div>
+        <div class="m">ใกล้ <a href="#" onclick="openSheet('${esc(e.stationId)}');return false">${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)}</a> ${e.distKm} กม.</div>
+        ${e.kind==="quake" && e.nearby?.length ? `<details style="margin-top:6px"><summary class="m" style="cursor:pointer"><b>สถานีที่ควรตรวจ ${e.nearby.length} แห่ง</b> (เรียงจากใกล้ไปไกล)</summary>
+          <ol class="note" style="margin:6px 0 0;padding-left:20px">${e.nearby.map(x => `<li><a href="#" onclick="openSheet('${esc(x.id)}');return false">${esc(x.name)}</a> · ${x.distKm} กม.</li>`).join("")}</ol></details>` : ""}
+      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}ใกล้สถานีใน 24 ชม.</div>`}`;
+  $("#events").querySelectorAll("button[data-evf]").forEach(b => b.onclick = () => { evFilter = b.dataset.evf; drawEvents(); });
+}
+
 /* ============ GUIDE ============ */
 function gtable(head, rows){ return `<div class="gt-wrap"><table class="gt"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }
 function drawGuide(){
@@ -550,6 +599,14 @@ function drawGuide(){
   <div class="card"><h3>จุดแจ้งน้ำท่วม (สูงสุด 30 คะแนน)</h3>
     <p>นับจุดแจ้งน้ำท่วมในรัศมี 1.5 กม. จาก 2 แหล่ง: Traffy Fondue (เรื่องที่มีคำว่า "ท่วม" แจ้งภายใน 6 ชั่วโมง) และ Longdo Traffic / กรมทางหลวง (รายงานน้ำท่วมที่ยังไม่หมดเวลา) ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
     <p style="margin:0"><b>คะแนนรวม = คะแนนฝน + คะแนนระดับน้ำ + คะแนนแจ้งน้ำท่วม</b> (สูงสุด 100 คะแนน)</p></div>
+
+  <div class="card"><h3>เหตุการณ์ใกล้สถานี (ไม่นำมาคิดคะแนนน้ำท่วม)</h3>
+    <p>ทุก 15 นาที ระบบรวบรวมเหตุการณ์ 24 ชั่วโมงล่าสุดที่เกี่ยวกับระบบไฟฟ้า และระบุสถานีที่ใกล้ที่สุด แสดงเป็นไอคอนบนแผนที่ ในแท็บเหตุการณ์ และในหน้ารายละเอียดสถานี</p>
+    ${gtable(["เหตุการณ์","แหล่ง","รัศมี"],[
+      ["⚡ สายไฟ/ไฟฟ้า (สายหย่อน เสาเอียง ไฟฟ้าลัดวงจร หม้อแปลง ไฟดับ)","Traffy Fondue, Longdo Traffic","2 กม."],
+      ["🔥 ไฟไหม้","Longdo Traffic","2 กม."],
+      ["〰️ แผ่นดินไหว พร้อมรายการสถานีที่ควรตรวจ","Longdo Traffic","30 กม."]])}
+    <p style="margin:0">ไม่รวมไฟส่องสว่างถนน ซึ่งเป็นความรับผิดชอบของ กทม.</p></div>
 
   <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
     ["0–24",dot(0)+"ปกติ","–"],
@@ -783,13 +840,16 @@ $("#authBtn").onclick = async () => {
 auth.onAuthStateChanged(u => { user = u; $("#authBtn").textContent = u ? "ออกจากระบบ" : "เข้าสู่ระบบ"; renderAll(); });
 
 function renderAll(){
-  drawMap(); drawList(); drawReport(); drawGuide(); drawSettings(); if(openId) drawSheet();
+  drawMap(); drawList(); drawReport(); drawEvents(); drawGuide(); drawSettings(); if(openId) drawSheet();
   const latest = stations.map(s=>s.risk?.updatedAt).filter(Boolean).sort().pop();
   $("#updated").innerHTML = latest ? `ประเมินล่าสุด<br>${thTime(latest)}` : (demo ? "โหมดตัวอย่าง" : "รอข้อมูลจาก n8n");
 }
 db.collection("flood_stations").onSnapshot(snap => {
   stations = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, _noname: !s.name, name: s.name || `(ไม่มีชื่อ: ${decodeURIComponent(s.id)})`})); renderAll();
 }, e => { $("#updated").textContent = "เชื่อมฐานข้อมูลไม่ได้"; toast(e.message); });
+db.collection("grid_events").orderBy("at","desc").limit(300).onSnapshot(snap => {
+  gridEvents = snap.docs.map(d => ({id:d.id, ...d.data()})); drawMap(); drawEvents(); if(openId) drawSheet();
+}, () => {});
 db.collection("flood_reports").orderBy("receivedAt","desc").limit(5).onSnapshot(snap => {
   reports = snap.docs.map(d => d.data()).filter(r => r.valid !== false); drawReport();
 }, () => {});
