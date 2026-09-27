@@ -116,6 +116,25 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .tip b{font-size:14px}
 .tip .lvl{margin-right:4px}
 .tip-t{color:var(--muted);font-size:12px}
+.ltool{display:flex;gap:8px;margin-bottom:10px}
+.ltool input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.ltool select{width:auto;background:var(--panel)}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:8px}
+@media (max-width:520px){.lgrid{grid-template-columns:1fr}}
+.srow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:10px;padding:9px 12px;width:100%;text-align:left;min-height:64px}
+.srow:hover{box-shadow:0 2px 10px rgba(15,42,58,.08)}
+.srow .nm{font-weight:600;font-size:15px;line-height:1.3}
+.srow .tp{font-size:11px;color:var(--muted);font-weight:500;margin-left:4px}
+.srow .mt{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);margin-top:3px}
+.srow .mt b{color:var(--text);font-weight:600}
+.srow .bd{flex:1;min-width:0}
+.srow .sc{text-align:right;flex:none;min-width:58px}
+.srow .sc b{display:block;font-size:22px;line-height:1;color:var(--c)}
+.srow .sc span{font-size:11px;color:var(--c);font-weight:600}
+.acc{font-size:11px;font-weight:600;padding:1px 6px;border-radius:5px;background:#e8eef2;color:var(--text)}
+.acc.no{background:#fde2e5;color:#b3182c}
+.filters button .n{opacity:.7;margin-left:4px}
+.filters .dot{margin-right:5px;vertical-align:-1px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1000;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
@@ -139,7 +158,8 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 
 <main>
   <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div></section>
-  <section class="view" id="v-list"><div class="pad">
+  <section class="view" id="v-list"><div class="pad" style="max-width:1200px">
+    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
     <div class="filters" id="filters"></div>
     <div id="list"></div>
   </div></section>
@@ -295,36 +315,55 @@ $("#strip").addEventListener("click", e => {
 map.on("zoomend", () => drawMap());
 
 /* ============ LIST ============ */
+let listQ = "", listSort = "score";
 function drawList(){
-  const fs = [["all","ทั้งหมด"],["alert","ต้องจับตา"],["confirmed","น้ำท่วมขัง"],["nopin","ยังไม่ปักหมุด"]];
+  const cnt = {"-1":0,0:0,1:0,2:0,3:0,4:0}; stations.forEach(s => cnt[levelOf(s)]++);
+  const lvChip = lv => { const I = LV(lv); return [String(lv), `<span class="dot" style="display:inline-block;background:${I.hex}"></span>${I.name}<span class="n">${cnt[lv]+(lv===3?cnt[4]:0)}</span>`]; };
+  const fs = [["all",`ทั้งหมด<span class="n">${stations.length}</span>`], lvChip(3), lvChip(2), lvChip(1), lvChip(0), lvChip(-1)];
+  const nopin = stations.filter(s => s.lat == null).length;
+  if(nopin) fs.push(["nopin",`ยังไม่ปักหมุด<span class="n">${nopin}</span>`]);
+  if(!fs.some(([k]) => k === filter)) filter = "all";
   $("#filters").innerHTML = fs.map(([k,t]) => `<button data-f="${k}" class="${filter===k?"on":""}">${t}</button>`).join("")
     + (stations.length ? `<button data-f="__export" style="margin-left:auto">ส่งออก CSV</button>` : "");
-  let arr = stations.slice();
-  if(filter==="alert") arr = arr.filter(s => levelOf(s) >= 1);
-  if(filter==="confirmed") arr = arr.filter(isConfirmed);
-  if(filter==="nopin") arr = arr.filter(s => s.lat == null);
-  arr.sort((a,b) => (levelOf(b)-levelOf(a)) || ((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th"));
   if(!stations.length){
     $("#list").innerHTML = `<div class="empty">ยังไม่มีสถานีในระบบ<br><button class="btn pri" style="margin-top:12px" onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button></div>`;
     return;
   }
-  if(!arr.length){ $("#list").innerHTML = `<div class="empty">ไม่มีสถานีในกลุ่มนี้</div>`; return; }
-  $("#list").innerHTML = arr.map(s => {
-    const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s);
-    const meta = [];
-    if(r) meta.push(r.rain24h == null ? "ไม่มีสถานีวัดฝนในรัศมี 15 กม." : `ฝน 24 ชม. ${r.rain24h} มม.`, `แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด`);
-    if(a && a.status && a.status!=="unknown") meta.push(ACCESS[a.status]?.t);
-    if(s.lat == null) meta.push("ยังไม่ปักหมุด");
-    return `<button class="row" onclick="openSheet('${esc(s.id)}')">
-      <span class="gauge" aria-hidden="true"><i style="height:${gaugePct(s)}%;background:${lvl.hex}"></i></span>
-      <span class="body"><h3>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</h3>
-        <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>
-        <div class="meta" style="margin-top:4px">${meta.map(esc).join(" / ") || "&nbsp;"}</div></span>
-      <span class="score" style="color:${lvl.hex}">${lv===4?"!":(r&&!isNoData(r)?r.score:"–")}</span>
+  let arr = stations.slice();
+  if(filter === "nopin") arr = arr.filter(s => s.lat == null);
+  else if(filter !== "all"){ const f = +filter; arr = arr.filter(s => { const lv = levelOf(s); return f===3 ? lv>=3 : lv===f; }); }
+  const q = listQ.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"");
+  if(q) arr = arr.filter(s => String(s.name).includes(q));
+  const sc = s => riskOf(s)?.score || 0, rn = s => riskOf(s)?.rain24h ?? -1, rp = s => { const r = riskOf(s); return r ? (r.traffyCount||0)+(r.longdoCount||0) : 0; };
+  const byName = (a,b) => String(a.name).localeCompare(String(b.name),"th");
+  const sorters = {
+    score: (a,b) => (levelOf(b)-levelOf(a)) || (sc(b)-sc(a)) || byName(a,b),
+    rain: (a,b) => (rn(b)-rn(a)) || byName(a,b),
+    reports: (a,b) => (rp(b)-rp(a)) || (sc(b)-sc(a)) || byName(a,b),
+    name: byName };
+  arr.sort(sorters[listSort] || sorters.score);
+  if(!arr.length){ $("#list").innerHTML = `<div class="empty">ไม่พบสถานี${q?`ที่ชื่อมี "${esc(q)}"`:"ในกลุ่มนี้"}</div>`; return; }
+  $("#list").innerHTML = `<div class="lgrid">` + arr.map(s => {
+    const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s), nd = !r || isNoData(r);
+    const mt = [];
+    if(nd) mt.push(r ? "ไม่มีสถานีวัดในรัศมี 15 กม." : "รอข้อมูลจาก n8n");
+    else {
+      mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.`);
+      if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>`);
+      const n = rp(s); if(n) mt.push(`แจ้งน้ำท่วม <b>${n}</b> จุด`);
+    }
+    if(s.lat == null) mt.push("ยังไม่ปักหมุด");
+    const acc = a && a.status && a.status!=="unknown" ? `<span class="acc ${a.status==="no_access"?"no":""}">${ACCESS[a.status]?.t}</span>` : "";
+    return `<button class="srow" style="--c:${lvl.hex}" onclick="openSheet('${esc(s.id)}')">
+      <span class="bd"><span class="nm">${esc(s.name)}</span><span class="tp">${esc(TYPE[s.type]||"")}</span> ${acc}
+        <span class="mt">${mt.map(x=>`<span>${x}</span>`).join("")}</span></span>
+      <span class="sc"><b>${nd?"–":(r?.score ?? "–")}</b><span>${lvl.name}</span></span>
     </button>`;
-  }).join("");
+  }).join("") + `</div>`;
 }
 $("#filters").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; if(b.dataset.f==="__export") return exportStations(); filter=b.dataset.f; drawList(); });
+$("#lq").addEventListener("input", e => { listQ = e.target.value; drawList(); });
+$("#lsort").addEventListener("change", e => { listSort = e.target.value; drawList(); });
 
 /* ============ DETAIL SHEET ============ */
 function openSheet(id){ openId = id; drawSheet(); $("#sheet").classList.add("on"); $("#sheetBg").classList.add("on"); }
