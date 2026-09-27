@@ -71,7 +71,7 @@ h2{font-size:15px;margin:18px 0 8px}
       <div><i style="background:var(--l3)"></i>น้ำในรัศมี 500 ม.</div>
       <div><i style="background:var(--l2)"></i>น้ำในรัศมี 1 กม.</div>
       <div><i style="background:var(--l1)"></i>น้ำในรัศมี 3 กม.</div>
-      <div><i style="background:var(--l0)"></i>ไม่พบน้ำ</div>
+      <div><i style="background:#94a3b8"></i>ดาวเทียมไม่เห็นน้ำ<br><small style="color:var(--muted)">(ไม่ได้แปลว่าไม่ท่วม)</small></div>
     </div>
   </div>
   <aside id="panel"><div class="empty">กำลังโหลดข้อมูล…</div></aside>
@@ -97,7 +97,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const thDate = d => d ? new Date(d.length === 10 ? d + "T12:00:00+07:00" : d).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"2-digit"}) : "-";
 const thTime = d => d ? new Date(d).toLocaleString("th-TH",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "-";
 const lvl = g => !g ? null : g.c500 ? 3 : g.c1k ? 2 : g.c3k ? 1 : 0;
-const LV = [{c:"#1f9d63",t:"ไม่พบน้ำ"},{c:"#d9a400",t:"น้ำในรัศมี 3 กม."},{c:"#ea6a12",t:"น้ำในรัศมี 1 กม."},{c:"#e03347",t:"น้ำในรัศมี 500 ม."}];
+const LV = [{c:"#94a3b8",t:"ดาวเทียมไม่เห็นน้ำ"},{c:"#d9a400",t:"น้ำในรัศมี 3 กม."},{c:"#ea6a12",t:"น้ำในรัศมี 1 กม."},{c:"#e03347",t:"น้ำในรัศมี 500 ม."}];
 
 const map = L.map("map",{zoomControl:false,preferCanvas:true}).setView([13.76,100.6],10);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · ข้อมูลน้ำท่วม: GISTDA',maxZoom:19}).addTo(map);
@@ -121,7 +121,7 @@ function drawStations(){
     const l = lvl(s.gistda); const c = l == null ? "#8aa0ae" : LV[l].c;
     const g = s.gistda || {};
     const m = L.circleMarker([s.lat,s.lng],{radius:l >= 2 ? 8 : 6,color:"#fff",weight:1.5,fillColor:c,fillOpacity:1}).addTo(stLayer)
-      .bindTooltip(`<b>${esc(s.name)}</b><br>${l == null ? "ยังไม่มีข้อมูลดาวเทียม" : l === 0 ? "ไม่พบน้ำในรัศมี 3 กม." : `น้ำ ${g.c500} ช่องใน 500 ม. · ${g.c1k} ใน 1 กม. · ${g.c3k} ใน 3 กม.`}`);
+      .bindTooltip(`<b>${esc(s.name)}</b><br>${l == null ? "ยังไม่มีข้อมูลดาวเทียม" : l === 0 ? "ดาวเทียมไม่เห็นน้ำในรัศมี 3 กม. (ไม่ได้แปลว่าไม่ท่วม)" : `น้ำ ${g.c500} ช่องใน 500 ม. · ${g.c1k} ใน 1 กม. · ${g.c3k} ใน 3 กม.`}`);
     markers[s.id] = m; pts.push([s.lat,s.lng]);
   }
   if(!fitted && pts.length){ map.fitBounds(pts,{padding:[30,30]}); fitted = true; }
@@ -139,14 +139,15 @@ function drawPanel(){
   $("#stamp").innerHTML = `ภาพดาวเทียมล่าสุด ${thDate(summary.latestAt)}<br>ดึงข้อมูล ${thTime(summary.updatedAt)}`;
   P.innerHTML = `
     ${failed ? `<div class="warn" style="margin:0 0 12px"><b>ดึงข้อมูลจาก GISTDA ไม่สำเร็จ</b><br>${esc(summary.lastErr || "")}<br>ตรวจ credential “GISTDA API” ใน n8n (Header Auth, Name: API-Key)</div>` : ""}
-    <p class="lead">${summary.total ? `${hit.length} สถานี มีน้ำท่วมใกล้` : "ไม่พบน้ำท่วม"}
-      <span>${summary.total ? `ดาวเทียมพบพื้นที่น้ำประมาณ ${km2.toLocaleString("th-TH")} ตร.กม. ในเขต กฟน.` : "ดาวเทียมไม่พบน้ำท่วมในเขต กฟน. ช่วง 7 วันล่าสุด"}</span></p>
+    <p class="lead">${summary.total ? `${hit.length} สถานี มีน้ำท่วมใกล้` : "ดาวเทียมยังไม่เห็นน้ำท่วม"}
+      <span>${summary.total ? `ดาวเทียมพบพื้นที่น้ำประมาณ ${km2.toLocaleString("th-TH")} ตร.กม. ในเขต กฟน.` : "ภาพดาวเทียม 7 วันล่าสุดไม่เห็นน้ำขังในเขต กฟน."}</span></p>
     <div class="facts">
       <div><b>${(bp["10"]||0).toLocaleString("th-TH")}</b>ช่อง · ${PV["10"]}</div>
       <div><b>${(bp["12"]||0).toLocaleString("th-TH")}</b>ช่อง · ${PV["12"]}</div>
       <div><b>${(bp["11"]||0).toLocaleString("th-TH")}</b>ช่อง · ${PV["11"]}</div>
       <div><b>${summary.stationsTotal || stations.length}</b>สถานีที่ตรวจ</div>
     </div>
+    <div class="warn" style="margin:0 0 4px"><b>จุดสีเทาไม่ได้แปลว่าไม่ท่วม</b><br>ดาวเทียมเห็นน้ำท่วมขังบนพื้นที่โล่งกว้าง เช่น ทุ่งนา ได้ดี แต่มักมองไม่เห็นน้ำท่วมถนนในเมือง เพราะตึกบังสัญญาณ น้ำตื้น และระบายหมดภายในไม่กี่ชั่วโมงก่อนดาวเทียมโคจรผ่าน ความเสี่ยงจริงของแต่ละสถานีให้ดูที่หน้าหลัก <a href="./">FloodEye</a></div>
     ${summary.truncated ? `<div class="note">แสดงบนแผนที่ 50,000 ช่องแรก จากทั้งหมด ${summary.total.toLocaleString("th-TH")} ช่อง</div>` : ""}
     <h2>สถานีที่มีน้ำท่วมในรัศมี 3 กม.</h2>
     ${hit.length ? hit.map(s => { const l = lvl(s.gistda), g = s.gistda; return `
@@ -154,7 +155,6 @@ function drawPanel(){
         <div><div class="n">${esc(s.name)}</div><div class="m">${LV[l].t}${g.nearestKm != null ? `, ใกล้สุด ${g.nearestKm} กม.` : ""}</div></div>
         <div class="c">${g.c500} / ${g.c1k} / ${g.c3k}</div></button>`; }).join("") + `<div class="note" style="margin-top:6px">ตัวเลขขวา คือจำนวนช่องน้ำท่วมในรัศมี 500 ม. / 1 กม. / 3 กม.</div>`
       : `<div class="empty">ไม่มีสถานีที่พบน้ำท่วมในรัศมี 3 กม.</div>`}
-    <div class="warn">ดาวเทียมเห็นน้ำท่วมขังพื้นที่กว้างได้ดี แต่อาจไม่เห็นน้ำขังบนถนนในเมืองที่ท่วมเพียงไม่กี่ชั่วโมง ใช้หน้านี้ร่วมกับคะแนนความเสี่ยงในหน้าหลัก <a href="./">FloodEye</a></div>
     <p class="note">ข้อมูล: สำนักงานพัฒนาเทคโนโลยีอวกาศและภูมิสารสนเทศ (GISTDA) ตามนโยบายข้อมูลเปิดภาครัฐ อัปเดตทุก 3 ชั่วโมง</p>`;
   P.querySelectorAll(".st").forEach(b => b.onclick = () => {
     const s = stations.find(x => x.id === b.dataset.id); if(!s) return;
