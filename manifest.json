@@ -1,12 +1,24 @@
 {
-  "name": "FloodEye — น้ำท่วมสถานีไฟฟ้า",
+  "id": "/",
+  "name": "FloodEye — เฝ้ามองน้ำท่วมสถานีไฟฟ้า",
   "short_name": "FloodEye",
-  "start_url": "./",
+  "description": "เฝ้ามองน้ำท่วมและระดับน้ำคลองที่ใกล้สถานีไฟฟ้า กฟน. ประเมินความเสี่ยงทุก 15 นาที",
+  "lang": "th",
+  "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "categories": ["utilities", "weather"],
   "icons": [
-    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ],
+  "shortcuts": [
+    {"name": "สถานี", "url": "./?tab=list", "icons": [{"src": "icon-192.png", "sizes": "192x192"}]},
+    {"name": "รายงาน", "url": "./?tab=report", "icons": [{"src": "icon-192.png", "sizes": "192x192"}]}
   ]
 }
