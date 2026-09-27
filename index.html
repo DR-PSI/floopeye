@@ -206,7 +206,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 <main>
   <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div><div class="modes" id="modes"></div></section>
   <section class="view" id="v-list"><div class="pad" style="max-width:1200px">
-    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
+    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="forecast">เรียงตามคาดการณ์ 3 ชม.</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
     <div class="filters" id="filters"></div>
     <div id="list"></div>
   </div></section>
@@ -260,9 +260,11 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
-const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อน"}, insulator:{ic:"🧂", name:"ลูกถ้วย (เค็ม/ฝุ่น)"}};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อน"}, insulator:{ic:"🧂", name:"ลูกถ้วย (เค็ม/ฝุ่น)"}};
 let mapMode = localStorage.getItem("fe_mode") || "flood";
-function wxTip(s, mode){ const w = s.weather?.[mode]; if(!w) return "";
+function wxTip(s, mode){
+  if(mode==="forecast"){ const f = forecastOf(s); return f ? `<div>ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม.</div><div>คะแนนคาดการณ์ ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</div>` : "<div>ยังไม่มีข้อมูลพยากรณ์ฝน</div>"; }
+  const w = s.weather?.[mode]; if(!w) return "";
   if(mode==="storm") return `<div>ฝน 3 ชม.ข้างหน้า ${w.rain3h ?? "-"} มม. · ลมกระโชก ${w.gustMax ?? "-"} กม./ชม.</div><div>${w.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${w.cape!=null?` · CAPE ${w.cape}`:""}</div>`;
   if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C</div>`;
   return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
@@ -314,8 +316,22 @@ function riskOf(s){
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
 const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
-const mapLevel = s => mapMode === "flood" ? levelOf(s) : (s.weather?.[mapMode]?.level ?? -1);
+const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
+/* คาดการณ์ 3 ชม.: ฝนสะสม (ThaiWater) + ฝนที่จะตกอีก 3 ชม. (Open-Meteo จาก Weather Risk) — เกณฑ์ต้องตรงกับ Compute Risk ใน n8n */
+const fRainPts = mm => mm>=150?65 : mm>=120?55 : mm>=90?45 : mm>=60?30 : mm>=35?15 : mm>=10?5 : 0;
+const fWlPts = p => p>=100?35 : p>=90?25 : p>=80?15 : p>=70?6 : 0;
+const fRepPts = n => Math.min(30, n*8);
+function forecastOf(s){
+  const r = riskOf(s), w = s.weather;
+  const r3 = w?.storm?.rain3h;
+  if(r3 == null || !w.updatedAt || hoursAgo(w.updatedAt) > 2) return null;
+  const now = r && !isNoData(r) ? r : null;
+  const rainTotal = Math.round(((now?.rain24h ?? 0) + r3) * 10) / 10;
+  const score = Math.min(100, fRainPts(rainTotal) + fWlPts(now?.wlPercent || 0) + fRepPts(now ? (now.traffyCount||0)+(now.longdoCount||0) : 0));
+  const level = scoreToLevel(score), nowLevel = levelOf(s);
+  return {rain3h: r3, rainTotal, score, level: Math.max(level, nowLevel === 4 ? 4 : level), nowScore: now?.score ?? null, up: nowLevel < 4 && level > nowLevel};
+}
 function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
 function levelOf(s){
   if(isConfirmed(s)) return 4;
@@ -436,6 +452,7 @@ function drawList(){
   const byName = (a,b) => String(a.name).localeCompare(String(b.name),"th");
   const sorters = {
     score: (a,b) => (levelOf(b)-levelOf(a)) || (sc(b)-sc(a)) || byName(a,b),
+    forecast: (a,b) => ((forecastOf(b)?.score ?? -1)-(forecastOf(a)?.score ?? -1)) || (sc(b)-sc(a)) || byName(a,b),
     rain: (a,b) => (rn(b)-rn(a)) || byName(a,b),
     reports: (a,b) => (rp(b)-rp(a)) || (sc(b)-sc(a)) || byName(a,b),
     name: byName };
@@ -449,6 +466,7 @@ function drawList(){
       mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.${r.rainStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
       if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>${r.wlStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
       const n = rp(s); if(n) mt.push(`แจ้งน้ำท่วม <b>${n}</b> จุด`);
+      const f = forecastOf(s); if(f && f.up) mt.push(`<b style="color:${LV(f.level).hex}">⏳ ${LV(f.level).name}ใน 3 ชม.</b>`);
     }
     if(s.lat == null) mt.push("ยังไม่ปักหมุด");
     const acc = a && a.status && a.status!=="unknown" ? `<span class="acc ${a.status==="no_access"?"no":""}">${ACCESS[a.status]?.t}</span>` : "";
@@ -485,6 +503,9 @@ function drawSheet(){
       <div><b>${r ? (r.traffyCount||0)+(r.longdoCount||0) : "-"}</b><span>จุดแจ้งน้ำท่วม Traffy + Longdo (1.5 กม.)</span></div>
       <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
     </div>
+    ${(()=>{ const f = forecastOf(s); if(!f) return ""; const L = LV(f.level);
+      return `<div class="sec"><h4>⏳ คาดการณ์ 3 ชม. ข้างหน้า</h4><p style="margin:0 0 4px"><span class="lvl" style="background:${L.hex}">${L.name}</span> คะแนนคาด ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</p>
+        <p class="note" style="margin:0">ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. → ฝนรวมประมาณ ${f.rainTotal} มม. · พยากรณ์จาก Open-Meteo อัปเดต ${thTime(s.weather.updatedAt)}<br>เป็นค่าพยากรณ์ อาจคลาดเคลื่อนทั้งปริมาณและตำแหน่งฝน</p></div>`; })()}
     ${r&&r.reports?`<div class="sec"><h4>รายงานน้ำท่วมในรัศมี 3 กม. (Traffy + Longdo)</h4>${r.reports.length?`<ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.${x.ageH!=null?` · ${x.ageH<1?"ไม่ถึง 1":Math.round(x.ageH)} ชม.ก่อน`:""}${x.active===false?" · <b>สิ้นสุดแล้ว</b>":""}</li>`).join("")}</ul><p class="note" style="margin-top:4px">นับเป็นคะแนนเฉพาะรายงานที่ยังไม่สิ้นสุดในรัศมี 1.5 กม.</p>`:`<p class="note">ไม่มีรายงานน้ำท่วมในรัศมี 3 กม. ช่วง 6 ชม. ที่ผ่านมา</p>`}</div>`:""}
     ${s.cctv?(()=>{ const c=s.cctv, names=["ถนนแห้ง","ถนนเปียก","น้ำขังขอบถนน","น้ำท่วมผิวถนน","น้ำท่วมสูง"], cols=["#1f9d63","#8aa0ad","#d9a400","#ea6a12","#e03347"];
       const vis={night:"กลางคืน",blurred:"ภาพเบลอ",obstructed:"มีสิ่งบัง",offline:"กล้องออฟไลน์"}[c.visibility];
