@@ -155,6 +155,30 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 @media (max-width:560px){.wxg{grid-template-columns:1fr}}
 .wxc{background:var(--panel2);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:9px 10px;font-size:13px}
 .wxc b{display:block;font-size:14px;margin-bottom:2px}
+.modes .mcur{display:none}
+@media (max-width:640px){
+  .modes{top:52px;right:8px;padding:3px;gap:2px;border-radius:10px}
+  .modes .mcur{display:flex;align-items:center;gap:4px;font-size:12.5px;padding:5px 8px;font-weight:600;color:#075f86}
+  .modes .mcur .car{font-size:10px;opacity:.7}
+  .modes .mlist{display:none;flex-direction:column;gap:2px}
+  .modes.open .mlist{display:flex}
+  .modes.open .mcur{border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+  .modes .mlist button{font-size:12.5px;padding:6px 8px}
+  .strip{left:8px;right:8px;top:8px;gap:4px}
+  .chip{padding:4px 9px;font-size:12px;gap:4px}
+  .chip .dot,.dot{width:8px;height:8px}
+  header{padding:8px 10px;gap:8px}
+  .brand{font-size:16px}
+  .brand img{width:38px}
+  .brand small{font-size:10px}
+  .brand small.by{font-size:9px}
+  .updated{font-size:10.5px}
+  #authBtn,#installBtn{padding:5px 8px;font-size:12px}
+  nav button{font-size:11px;padding:8px 2px 10px}
+  nav button svg{width:20px;height:20px}
+}
+.modes .mlist{display:flex;flex-direction:column;gap:4px}
+@media (max-width:640px){ .modes .mlist{display:none} .modes.open .mlist{display:flex} }
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
@@ -355,7 +379,8 @@ function drawMap(){
   const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
   $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
     + (!showEv ? "" : Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join(""));
-  $("#modes").innerHTML = Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("");
+  $("#modes").innerHTML = `<button class="mcur" data-toggle="1" aria-label="เลือกมุมมองแผนที่">${MODES[mapMode].ic}<span class="mt">${MODES[mapMode].name}</span><span class="car">▾</span></button>`
+    + `<div class="mlist">` + Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("") + `</div>`;
 }
 $("#strip").addEventListener("click", e => {
   const be = e.target.closest("button[data-ev]");
@@ -378,7 +403,11 @@ const FitCtl = window.L.Control.extend({ options:{position:"bottomright"},
     window.L.DomEvent.on(b,"click",e=>{ window.L.DomEvent.stop(e); fitStations(stations.filter(s=>s.lat!=null).map(s=>[s.lat,s.lng])); }); return b; } });
 new FitCtl().addTo(map);
 map.on("zoomend", () => drawMap());
-$("#modes").addEventListener("click", e => { const b = e.target.closest("button[data-mode]"); if(!b) return; mapMode = b.dataset.mode; localStorage.setItem("fe_mode", mapMode); drawMap(); });
+$("#modes").addEventListener("click", e => {
+  if(e.target.closest("button[data-toggle]")) return $("#modes").classList.toggle("open");
+  const b = e.target.closest("button[data-mode]"); if(!b) return;
+  mapMode = b.dataset.mode; localStorage.setItem("fe_mode", mapMode); $("#modes").classList.remove("open"); drawMap(); });
+map.on("click", () => $("#modes").classList.remove("open"));
 
 /* ============ LIST ============ */
 let listQ = "", listSort = "score";
