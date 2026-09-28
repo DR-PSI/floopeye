@@ -260,7 +260,7 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
-const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อน"}, insulator:{ic:"🧂", name:"ลูกถ้วย (เค็ม/ฝุ่น)"}};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}};
 let mapMode = localStorage.getItem("fe_mode") || "flood";
 /* พายุ/ฟ้าผ่า: ใช้ Google WeatherNext ถ้าใหม่ไม่เกิน 2 ชม. ไม่งั้นใช้ Open-Meteo */
 function stormOf(s){
@@ -268,7 +268,7 @@ function stormOf(s){
   if(g?.storm && g.updatedAt && hoursAgo(g.updatedAt) <= 2) return {...g.storm, src: "Google WeatherNext", at: g.updatedAt};
   const w = s.weather; return w?.storm ? {...w.storm, src: "Open-Meteo", at: w.updatedAt} : null;
 }
-/* ความร้อน: Google ถ้าใหม่ ไม่งั้น Open-Meteo · ลูกถ้วย: PM2.5 + ระยะทะเลจาก Open-Meteo, ความชื้นจาก Google ถ้าใหม่ */
+/* ความร้อน: Google ถ้าใหม่ ไม่งั้น Open-Meteo · ฝุ่น/เกลือเกาะฉนวน: PM2.5 + ระยะทะเลจาก Open-Meteo, ความชื้นจาก Google ถ้าใหม่ */
 const gFresh = s => s.gweather?.updatedAt && hoursAgo(s.gweather.updatedAt) <= 2;
 function heatOf(s){
   if(gFresh(s) && s.gweather.heat) return {...s.gweather.heat, src: "Google WeatherNext", at: s.gweather.updatedAt};
@@ -602,8 +602,8 @@ function drawSheet(){
       const st=stormOf(s)||{}, ht=heatOf(s)||{}, ins=insulatorOf(s)||{};
       return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
         <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${st.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อน 24 ชม. · ${L3(ht.level).name}</b>สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ลูกถ้วย · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อนสะสมในสถานี · ${L3(ht.level).name}</b>24 ชม. ข้างหน้า สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ฝุ่น/เกลือเกาะฉนวน · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}${ins.level>=2?"<br>เสี่ยงไฟวาบที่ลูกถ้วย ควรล้างหรือตรวจฉนวน":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
       </div></div>`; })():""}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
@@ -777,9 +777,9 @@ function drawGuide(){
     <p>อัปเดตทุก 1 ชั่วโมงจาก Open-Meteo (พยากรณ์อากาศและคุณภาพอากาศ) แยกจากคะแนนน้ำท่วม</p>
     ${gtable(["ความเสี่ยง","เฝ้าระวัง","เสี่ยงสูง","วิกฤต"],[
       ["⛈️ พายุ/ฟ้าผ่า (3 ชม.ข้างหน้า)","ฝน ≥5 มม. หรือลม ≥35 กม./ชม. หรือ CAPE ≥1500","พายุฝนฟ้าคะนอง หรือฝน ≥20 มม. หรือลม ≥50","พายุฝนฟ้าคะนอง ร่วมกับฝน ≥20 มม. หรือลม ≥60"],
-      ["🌡️ ความร้อน (24 ชม.)","สูงสุด ≥36°C หรือ ≥35°C และกลางคืน ≥29°C","สูงสุด ≥38°C","สูงสุด ≥40°C"],
-      ["🧂 ลูกถ้วย (เกลือ/ฝุ่น)","รวมคะแนน 1","รวมคะแนน 2","รวมคะแนน 3"]])}
-    <p style="margin:0">ลูกถ้วย: PM2.5 ≥75 = 2, ≥50 = 1 · ห่างทะเล ≤5 กม. = 2, ≤10 กม. = 1 · ฤดูแล้ง (ธ.ค.–พ.ค.) ใกล้ทะเล +1 · ความชื้น ≥90% (หมอก/น้ำค้างทำให้คราบนำไฟฟ้า) +1 ยังไม่มีข้อมูลความเค็มโดยตรง ใช้ระยะจากทะเลแทน</p></div>
+      ["🌡️ ความร้อนสะสมในสถานี (24 ชม. ข้างหน้า)","สูงสุด ≥36°C หรือ ≥35°C และกลางคืน ≥29°C","สูงสุด ≥38°C","สูงสุด ≥40°C"],
+      ["🧂 ฝุ่น/เกลือเกาะฉนวน (เสี่ยงไฟวาบ)","รวมคะแนน 1","รวมคะแนน 2","รวมคะแนน 3"]])}
+    <p style="margin:0">ฝุ่น/เกลือเกาะฉนวน (ลูกถ้วย): ฝุ่นหรือเกลือเกาะผิวฉนวนแล้วเจอความชื้นสูง อาจเกิดไฟวาบข้ามผิว (flashover) · PM2.5 ≥75 = 2, ≥50 = 1 · ห่างทะเล ≤5 กม. = 2, ≤10 กม. = 1 · ฤดูแล้ง (ธ.ค.–พ.ค.) ใกล้ทะเล +1 · ความชื้น ≥90% (หมอก/น้ำค้างทำให้คราบนำไฟฟ้า) +1 ยังไม่มีข้อมูลความเค็มโดยตรง ใช้ระยะจากทะเลแทน</p></div>
 
   <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
     ["0–24",dot(0)+"ปกติ","–"],
