@@ -287,6 +287,15 @@ function depthOf(t){
 }
 const isReceding = t => /น้ำลด|เริ่มลด|ลดลงแล้ว|แห้งแล้ว|ระบายหมด|ไม่ท่วมแล้ว/.test(t) && !/ไม่.{0,6}ลด/.test(t);
 const isRising = t => /สูงขึ้น|เพิ่มขึ้น|ยังตก|ไม่.{0,6}ลด|ขยาย/.test(t);
+const AI_ST = {flooding:["ยังท่วม",2], receding:["น้ำเริ่มลด",1], dry:["น้ำลดแล้ว",0], unclear:["ข้อมูลไม่ชัดเจน",1]};
+const AI_TR = {rising:"น้ำมีแนวโน้มสูงขึ้น", steady:"ระดับน้ำทรงตัว", falling:"น้ำกำลังลด"};
+const AI_AC = {normal:"รถทั่วไปเข้าได้", high_vehicle:"ควรใช้รถยกสูง", blocked:"รถเข้าไม่ได้"};
+function aiFloodOf(s){
+  const a = s.aiFlood; if(!a || !a.updatedAt || hoursAgo(a.updatedAt) > 12) return null;
+  const [name, lv0] = AI_ST[a.status] || AI_ST.unclear;
+  const level = a.status === "flooding" && (a.trend === "rising" || (a.depthMax||0) >= 30) ? 3 : lv0;
+  return {...a, name, level};
+}
 function floodSummaryOf(s){
   const now = Date.now();
   const ev = eventsFor(s).filter(e => e.kind === "flood" && (e.distKm ?? 0) <= 3).map(e => ({...e, t: new Date(e.at).getTime(), txt: (e.title||"") + " " + (e.address||"")}));
@@ -501,7 +510,8 @@ function drawList(){
       mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.${r.rainStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
       if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>${r.wlStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
       if(r.road && r.road.maxCm >= 5) mt.push(`ถนนน้ำ <b>${r.road.maxCm}</b> ซม.`);
-      const fs = floodSummaryOf(s); if(fs && fs.level >= 2) mt.push(`<b style="color:${fs.level>=3?"var(--l3)":"var(--l2)"}">🌊 ${fs.status.split(" · ")[0]}</b>`);
+      const fai = aiFloodOf(s), fs = fai ? {level: fai.level, status: fai.name} : floodSummaryOf(s);
+      if(fs && fs.level >= 2) mt.push(`<b style="color:${fs.level>=3?"var(--l3)":"var(--l2)"}">🌊 ${fs.status.split(" · ")[0]}${fai?" 🤖":""}</b>`);
       const n = rp(s); if(n) mt.push(`แจ้งน้ำท่วม <b>${n}</b> จุด`);
       const f = forecastOf(s); if(f && f.up) mt.push(`<b style="color:${LV(f.level).hex}">⏳ ${LV(f.level).name}ใน 3 ชม.</b>`);
     }
@@ -554,7 +564,11 @@ function drawSheet(){
         <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
     ${s.gistda ? `<div class="sec"><h4>ดาวเทียม GISTDA (7 วัน)</h4><div class="note">${s.gistda.c3k ? `พบน้ำท่วม ${s.gistda.c500} ช่องในรัศมี 500 ม. · ${s.gistda.c1k} ช่องใน 1 กม. · ${s.gistda.c3k} ช่องใน 3 กม.` : "ดาวเทียมไม่เห็นน้ำในรัศมี 3 กม. (ดาวเทียมมักมองไม่เห็นน้ำท่วมถนนในเมือง)"}${s.gistda.latestAt ? ` · ภาพล่าสุด ${esc(s.gistda.latestAt)}` : ""} · <a href="gistda.html">ดูแผนที่</a></div></div>` : ""}
     ${(()=>{ const f = floodSummaryOf(s); if(!f) return ""; const c = ["var(--l0)","var(--l1)","var(--l2)","var(--l3)"][f.level];
-      return `<div class="sec"><h4>🌊 สรุปน้ำท่วมรอบสถานี (รัศมี 3 กม.)</h4><p style="margin:0 0 4px"><b style="color:${c}">${f.status}</b></p>
+      const ai = aiFloodOf(s), LC = ["var(--l0)","var(--l1)","var(--l2)","var(--l3)"];
+      const aiHtml = ai ? `<div style="background:var(--panel2);border-radius:8px;padding:8px 10px;margin:0 0 8px"><div style="font-size:12px;color:var(--muted)">🤖 สรุปโดย AI</div>
+        <b style="color:${LC[ai.level]}">${ai.name}</b>${AI_TR[ai.trend]?` · ${AI_TR[ai.trend]}`:""}${ai.depthMax!=null?` · น้ำ ${ai.depthMin!=null&&ai.depthMin!==ai.depthMax?`${ai.depthMin}–`:""}${ai.depthMax} ซม.`:""}${AI_AC[ai.access]?` · ${AI_AC[ai.access]}`:""}
+        ${ai.summary?`<p style="margin:4px 0 0">${esc(ai.summary)}</p>`:""}<div class="note" style="margin-top:4px">จากรายงาน ${ai.reports} เรื่อง · ${esc(ai.model||"Claude")} · อัปเดต ${agoTxt(ai.updatedAt)} · AI อาจสรุปผิดพลาด</div></div>` : "";
+      return `<div class="sec"><h4>🌊 สรุปน้ำท่วมรอบสถานี (รัศมี 3 กม.)</h4>${aiHtml}<p style="margin:0 0 4px">${ai?`<span class="note">สรุปจากกฎ:</span> `:""}<b style="color:${c}">${f.status}</b></p>
         <p class="note" style="margin:0">รายงานใน 6 ชม. ${f.count6} เรื่อง (24 ชม. ${f.count24} เรื่อง)${f.trend?` · ${f.trend}`:""} · ล่าสุด ${agoTxt(f.latestAt)}${f.depthMax!=null?`<br>ระดับน้ำที่มีการรายงาน ${f.depthMin===f.depthMax?`ประมาณ ${f.depthMax}`:`${f.depthMin}–${f.depthMax}`} ซม.`:""}<br>สรุปจากข้อความที่ประชาชนแจ้ง อาจคลาดเคลื่อน ควรดูรูปประกอบ</p></div>`; })()}
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
     ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
