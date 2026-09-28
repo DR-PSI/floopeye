@@ -570,6 +570,13 @@ function drawSheet(){
       ${r&&r.demo?`<span class="note"> ค่าจำลอง</span>`:""}</div>
       <button class="btn sm" onclick="closeSheet()" aria-label="ปิด">ปิด</button>
     </div>
+    ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
+      const st=stormOf(s)||{}, ht=heatOf(s)||{}, ins=insulatorOf(s)||{};
+      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
+        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${st.src||"Open-Meteo"}</span></div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อนสะสมในสถานี · ${L3(ht.level).name}</b>24 ชม. ข้างหน้า สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ฝุ่น/เกลือเกาะฉนวน · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}${ins.level>=2?"<br>เสี่ยงไฟวาบที่ลูกถ้วย ควรล้างหรือตรวจฉนวน":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
+      </div></div>`; })():""}
     ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
     <div class="kv">
       <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainStale?` · ⏱ ค่าจากรอบก่อน (${thTime(r.rainAt)})`:""}${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:(r&&r.rain24h==null?" · ไม่มีสถานีวัดใกล้":"")}</span></div>
@@ -598,13 +605,6 @@ function drawSheet(){
       return `<div class="sec"><h4>🌊 สรุปน้ำท่วมรอบสถานี (รัศมี 3 กม.)</h4>${aiHtml}<p style="margin:0 0 4px">${ai?`<span class="note">สรุปจากกฎ:</span> `:""}<b style="color:${c}">${f.status}</b></p>
         <p class="note" style="margin:0">รายงานใน 6 ชม. ${f.count6} เรื่อง (24 ชม. ${f.count24} เรื่อง)${f.trend?` · ${f.trend}`:""} · ล่าสุด ${agoTxt(f.latestAt)}${f.depthMax!=null?`<br>ระดับน้ำที่มีการรายงาน ${f.depthMin===f.depthMax?`ประมาณ ${f.depthMax}`:`${f.depthMin}–${f.depthMax}`} ซม.`:""}<br>สรุปจากข้อความที่ประชาชนแจ้ง อาจคลาดเคลื่อน ควรดูรูปประกอบ</p></div>`; })()}
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
-    ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
-      const st=stormOf(s)||{}, ht=heatOf(s)||{}, ins=insulatorOf(s)||{};
-      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
-        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${st.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อนสะสมในสถานี · ${L3(ht.level).name}</b>24 ชม. ข้างหน้า สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ฝุ่น/เกลือเกาะฉนวน · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}${ins.level>=2?"<br>เสี่ยงไฟวาบที่ลูกถ้วย ควรล้างหรือตรวจฉนวน":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
-      </div></div>`; })():""}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
