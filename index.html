@@ -293,7 +293,7 @@ function wxTip(s, mode){
   if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C${w.heatIndexMax!=null?` · รู้สึกเหมือน ${w.heatIndexMax} °C`:""}</div><div>แหล่ง: ${w.src||"Open-Meteo"}</div>`;
   return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div><div>แหล่ง: ${w.src||"Open-Meteo"}</div>`; }
 const EVK = {flood:{name:"น้ำท่วม", ic:"🌊", hex:"#0284c7"}, wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
-let gridEvents = [], evFilter = "all", evPhotoOnly = false;
+let gridEvents = [], evFilter = "all", evPhotoOnly = false, evStation = "";
 const evPhoto = (e, big) => e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
 let showEv = localStorage.getItem("fe_show_ev") === "1";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
@@ -725,7 +725,12 @@ async function readInfographic(){
 
 /* ============ EVENTS ============ */
 function drawEvents(){
-  const ev = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  const evAll = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  const inSt = e => e.stationId === evStation || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === evStation));
+  const ev = evStation ? evAll.filter(inSt) : evAll;
+  /* รายชื่อสถานีที่มีเหตุการณ์ เรียงตามจำนวนเหตุการณ์ */
+  const stCount = {}; for(const e of evAll) if(e.stationId) stCount[e.stationId] = (stCount[e.stationId]||0) + 1;
+  const stOpts = stations.filter(x => stCount[x.id] || x.id === evStation).sort((a,b) => (stCount[b.id]||0) - (stCount[a.id]||0) || String(a.name).localeCompare(String(b.name),"th"));
   const cnt = k => ev.filter(e => e.kind === k).length;
   const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
   const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || e.photo);
@@ -733,7 +738,10 @@ function drawEvents(){
     <div class="rep-head"><h2>FloodEye — Grid Events</h2>
       <div class="note">24 ชั่วโมงล่าสุด · น้ำท่วมในรัศมี 5 กม. (เขต กฟน.) · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div>
       <a class="btn sm" href="gistda.html" style="display:inline-block;margin-top:8px;text-decoration:none">🛰️ ดูน้ำท่วมจากดาวเทียม GISTDA</a></div>
-    <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}<button data-evp="1" class="${evPhotoOnly?"on":""}">📷 เฉพาะที่มีรูป</button></div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <select id="evSt" style="flex:1;max-width:420px"><option value="">📍 ทุกสถานี (${evAll.length} เหตุการณ์)</option>${stOpts.map(x => `<option value="${esc(x.id)}" ${x.id===evStation?"selected":""}>${esc(TYPE[x.type]||"สถานี")}${esc(x.name)} · ${stCount[x.id]||0}</option>`).join("")}</select>
+      ${evStation?`<button class="btn sm" id="evStClr">✕ ล้าง</button>`:""}</div>
+    <div class="filters" style="margin-top:8px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}<button data-evp="1" class="${evPhotoOnly?"on":""}">📷 เฉพาะที่มีรูป</button></div>
     ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
       <div class="ic">${K.ic}</div><div style="flex:1;min-width:0">
         <div class="t">${esc(e.title)}</div>
@@ -742,7 +750,9 @@ function drawEvents(){
         ${e.kind==="quake" && e.nearby?.length ? `<details style="margin-top:6px"><summary class="m" style="cursor:pointer"><b>สถานีที่ควรตรวจ ${e.nearby.length} แห่ง</b> (เรียงจากใกล้ไปไกล)</summary>
           <ol class="note" style="margin:6px 0 0;padding-left:20px">${e.nearby.map(x => `<li><a href="#" onclick="openSheet('${esc(x.id)}');return false">${esc(x.name)}</a> · ${x.distKm} กม.</li>`).join("")}</ol></details>` : ""}
         ${evPhoto(e,true)}
-      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}${evPhotoOnly?"ที่มีรูป":""}ใกล้สถานีใน 24 ชม.</div>`}`;
+      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}${evPhotoOnly?"ที่มีรูป":""}${evStation?"ของสถานีนี้":"ใกล้สถานี"}ใน 24 ชม.</div>`}`;
+  $("#evSt").onchange = e => { evStation = e.target.value; drawEvents(); };
+  if($("#evStClr")) $("#evStClr").onclick = () => { evStation = ""; drawEvents(); };
   $("#events").querySelectorAll("button[data-evf]").forEach(b => b.onclick = () => { evFilter = b.dataset.evf; drawEvents(); });
   $("#events").querySelector("button[data-evp]").onclick = () => { evPhotoOnly = !evPhotoOnly; drawEvents(); };
 }
