@@ -268,12 +268,28 @@ function stormOf(s){
   if(g?.storm && g.updatedAt && hoursAgo(g.updatedAt) <= 2) return {...g.storm, src: "Google WeatherNext", at: g.updatedAt};
   const w = s.weather; return w?.storm ? {...w.storm, src: "Open-Meteo", at: w.updatedAt} : null;
 }
+/* ความร้อน: Google ถ้าใหม่ ไม่งั้น Open-Meteo · ลูกถ้วย: PM2.5 + ระยะทะเลจาก Open-Meteo, ความชื้นจาก Google ถ้าใหม่ */
+const gFresh = s => s.gweather?.updatedAt && hoursAgo(s.gweather.updatedAt) <= 2;
+function heatOf(s){
+  if(gFresh(s) && s.gweather.heat) return {...s.gweather.heat, src: "Google WeatherNext", at: s.gweather.updatedAt};
+  const w = s.weather; return w?.heat ? {...w.heat, src: "Open-Meteo", at: w.updatedAt} : null;
+}
+function insulatorOf(s){
+  const ins = s.weather?.insulator; if(!ins) return null;
+  if(!(gFresh(s) && s.gweather.rhMax != null)) return {...ins, src: "Open-Meteo"};
+  const rhMax = s.gweather.rhMax;
+  const pol = ins.pm25 == null ? 0 : ins.pm25 >= 75 ? 2 : ins.pm25 >= 50 ? 1 : 0;
+  const sea = ins.coastKm == null ? 0 : ins.coastKm <= 5 ? 2 : ins.coastKm <= 10 ? 1 : 0;
+  const base = pol + sea + (sea && ins.drySeason ? 1 : 0);
+  const level = Math.min(3, base + (base > 0 && rhMax >= 90 ? 1 : 0));
+  return {...ins, rhMax, level, src: "PM2.5 Open-Meteo · ความชื้น Google WeatherNext"};
+}
 function wxTip(s, mode){
   if(mode==="forecast"){ const f = forecastOf(s); return f ? `<div>ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. (${f.src})</div><div>คะแนนคาดการณ์ ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</div>` : "<div>ยังไม่มีข้อมูลพยากรณ์ฝน</div>"; }
-  const w = mode === "storm" ? (stormOf(s) || s.weather?.storm) : s.weather?.[mode]; if(!w) return "";
+  const w = mode === "storm" ? (stormOf(s) || s.weather?.storm) : mode === "heat" ? heatOf(s) : mode === "insulator" ? insulatorOf(s) : s.weather?.[mode]; if(!w) return "";
   if(mode==="storm"){ const t = stormOf(s) || w; return `<div>ฝน 3 ชม.ข้างหน้า ${t.rain3h ?? "-"} มม. · ลมกระโชก ${t.gustMax ?? "-"} กม./ชม.</div><div>${t.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${t.thunderMax!=null?` · โอกาส ${t.thunderMax}%`:""}${t.cape!=null?` · CAPE ${t.cape}`:""}</div><div>แหล่ง: ${t.src || "Open-Meteo"}</div>`; }
-  if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C</div>`;
-  return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
+  if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C${w.heatIndexMax!=null?` · รู้สึกเหมือน ${w.heatIndexMax} °C`:""}</div><div>แหล่ง: ${w.src||"Open-Meteo"}</div>`;
+  return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div><div>แหล่ง: ${w.src||"Open-Meteo"}</div>`; }
 const EVK = {flood:{name:"น้ำท่วม", ic:"🌊", hex:"#0284c7"}, wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
 let gridEvents = [], evFilter = "all", evPhotoOnly = false;
 const evPhoto = (e, big) => e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
@@ -367,7 +383,7 @@ function riskOf(s){
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
 const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
-const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : mapMode === "storm" ? (stormOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
+const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : mapMode === "storm" ? (stormOf(s)?.level ?? -1) : mapMode === "heat" ? (heatOf(s)?.level ?? -1) : mapMode === "insulator" ? (insulatorOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 /* คาดการณ์ 3 ชม.: ฝนสะสม (ThaiWater) + ฝนที่จะตกอีก 3 ชม. (Open-Meteo จาก Weather Risk) — เกณฑ์ต้องตรงกับ Compute Risk ใน n8n */
 const fRainPts = mm => mm>=150?65 : mm>=120?55 : mm>=90?45 : mm>=60?30 : mm>=35?15 : mm>=10?5 : 0;
@@ -583,11 +599,11 @@ function drawSheet(){
         <p class="note" style="margin:0">รายงานใน 6 ชม. ${f.count6} เรื่อง (24 ชม. ${f.count24} เรื่อง)${f.trend?` · ${f.trend}`:""} · ล่าสุด ${agoTxt(f.latestAt)}${f.depthMax!=null?`<br>ระดับน้ำที่มีการรายงาน ${f.depthMin===f.depthMax?`ประมาณ ${f.depthMax}`:`${f.depthMin}–${f.depthMax}`} ซม.`:""}<br>สรุปจากข้อความที่ประชาชนแจ้ง อาจคลาดเคลื่อน ควรดูรูปประกอบ</p></div>`; })()}
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
     ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
-      const st=stormOf(s)||{}, ht=w.heat||{}, ins=w.insulator||{};
+      const st=stormOf(s)||{}, ht=heatOf(s)||{}, ins=insulatorOf(s)||{};
       return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
         <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${st.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อน 24 ชม. · ${L3(ht.level).name}</b>สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}</div>
-        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ลูกถ้วย · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}</div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อน 24 ชม. · ${L3(ht.level).name}</b>สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ลูกถ้วย · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
       </div></div>`; })():""}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
