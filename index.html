@@ -509,7 +509,7 @@ function drawList(){
   if(nopin) fs.push(["nopin",`ยังไม่ปักหมุด<span class="n">${nopin}</span>`]);
   if(!fs.some(([k]) => k === filter)) filter = "all";
   $("#filters").innerHTML = fs.map(([k,t]) => `<button data-f="${k}" class="${filter===k?"on":""}">${t}</button>`).join("")
-    + (stations.length ? `<button data-f="__export" style="margin-left:auto">ส่งออก CSV</button>` : "");
+    + (stations.length ? `<button data-f="__export" style="margin-left:auto">🔒 ส่งออก CSV</button>` : "");
   if(!stations.length){
     $("#list").innerHTML = `<div class="empty">ยังไม่มีสถานีในระบบ<br><button class="btn pri" style="margin-top:12px" onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button></div>`;
     return;
@@ -814,7 +814,8 @@ function drawGuide(){
   <div class="card"><h3>สิทธิ์การใช้งาน</h3>${gtable(["การใช้งาน","เงื่อนไข"],[
     ["ดูแผนที่ สถานี รายงาน และคู่มือ","ทุกคนที่มีลิงก์"],
     ["อัปเดตสถานะ แก้พิกัด เพิ่มสถานี","เข้าสู่ระบบด้วยบัญชี Google"],
-    ["เข้าหน้าตั้งค่า","ต้องใส่รหัสผ่าน"]])}</div>
+    ["เข้าหน้าตั้งค่า","ต้องใส่รหัสผ่าน"],
+    ["ส่งออกรายชื่อและพิกัดสถานี (CSV)","ต้องใส่รหัสผ่านตั้งค่า"]])}</div>
 
   <div class="card"><h3>ข้อจำกัด</h3><ul>
     <li><b>ประเมินความเสี่ยงรอบสถานี:</b> ไม่ได้วัดระดับน้ำภายในรั้วสถานีโดยตรง</li>
@@ -948,7 +949,8 @@ async function purgeNoName(){
     toast(`ลบ ${list.length} รายการแล้ว`); }
   catch(e){ toast("ลบไม่สำเร็จ: "+e.message); }
 }
-function exportStations(){
+async function exportStations(){
+  if(sessionStorage.getItem("fe_settings_ok") !== "1" && !(await askSettingsPw("การส่งออกรายชื่อและพิกัดสถานีต้องใช้รหัสผ่านตั้งค่า", "ส่งออก CSV"))) return;
   const q = v => { v = v==null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
   const rows = [["id","name","type","lat","lng","level","score","rain24h_mm","google_maps"]];
   stations.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"th")).forEach(s => {
@@ -985,12 +987,12 @@ async function seedStations(){
 
 /* ============ NAV / AUTH / DATA ============ */
 async function sha256(t){ const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
-function askSettingsPw(){
+function askSettingsPw(msg = "แท็บตั้งค่าต้องใช้รหัสผ่าน", okLabel = "เข้าสู่ตั้งค่า"){
   return new Promise(res => {
     $("#sheet").innerHTML = `<div class="grab"></div><h2>ใส่รหัสผ่าน</h2>
-      <p class="note">แท็บตั้งค่าต้องใช้รหัสผ่าน</p>
+      <p class="note">${msg}</p>
       <input type="password" id="pwIn" inputmode="numeric" autocomplete="off" placeholder="รหัสผ่าน">
-      <div class="seg" style="margin-top:10px"><button id="pwCancel">ยกเลิก</button><button id="pwOk" class="on">เข้าสู่ตั้งค่า</button></div>
+      <div class="seg" style="margin-top:10px"><button id="pwCancel">ยกเลิก</button><button id="pwOk" class="on">${okLabel}</button></div>
       <p class="note" id="pwErr" style="color:var(--l3)"></p>`;
     $("#sheet").classList.add("on"); $("#sheetBg").classList.add("on"); setTimeout(()=>$("#pwIn").focus(),50);
     const done = ok => { $("#sheet").classList.remove("on"); $("#sheetBg").classList.remove("on"); res(ok); };
