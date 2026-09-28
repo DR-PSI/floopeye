@@ -562,7 +562,7 @@ $("#sheetBg").onclick = closeSheet;
 function drawSheet(){
   const s = stations.find(x => x.id === openId); if(!s) return closeSheet();
   const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s), c = s.confirmed;
-  const can = !!user;
+  const can = !!user, admin = can && isAdmin();
   $("#sheet").innerHTML = `<div class="grab"></div>
     <div style="display:flex;align-items:start;gap:10px">
       <div style="flex:1"><h2>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</h2>
@@ -609,19 +609,20 @@ function drawSheet(){
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
     </div>
-    ${can?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
+    ${can && !admin?`<div class="sec"><button class="btn" style="width:100%" onclick="unlockEdit('${esc(s.id)}')">🔒 แก้ชื่อ ตำแหน่ง หรือลบสถานี (ใช้รหัสตั้งค่า)</button></div>`:""}
+    ${admin?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
       <div class="two"><input type="text" id="eName" value="${esc(s.name)}" placeholder="ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)">
       <select id="eType"><option value="sub" ${s.type!=="terminal"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option></select></div>
       <div class="seg" style="margin-top:8px"><button onclick="saveName('${esc(s.id)}')">บันทึกชื่อ</button></div></div>`:""}
-    <div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
+    ${admin?`<div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
       <div class="two"><input type="number" step="any" id="eLat" placeholder="ละติจูด" value="${s.lat??""}" ${can?"":"disabled"}>
       <input type="number" step="any" id="eLng" placeholder="ลองจิจูด" value="${s.lng??""}" ${can?"":"disabled"}></div>
       <div class="seg" style="margin-top:8px">
         <button ${can?"":"disabled"} onclick="useGPS()">ใช้ตำแหน่งปัจจุบัน</button>
         <button ${can?"":"disabled"} onclick="saveCoords('${esc(s.id)}')">บันทึกพิกัด</button>
       </div>
-    </div>
-    ${can?`<div class="sec"><button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" onclick="deleteStation('${esc(s.id)}')">ลบสถานีนี้</button></div>`:""}
+    </div>`:""}
+    ${admin?`<div class="sec"><button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" onclick="deleteStation('${esc(s.id)}')">ลบสถานีนี้</button></div>`:""}
     <p class="note sec">คะแนนเสี่ยงคำนวณจากข้อมูลรอบสถานี ไม่ได้วัดน้ำในรั้วสถานีโดยตรง</p>`;
 }
 async function setAccess(id, status){
@@ -631,8 +632,11 @@ async function setAccess(id, status){
     toast("บันทึกสถานะการเข้าถึงแล้ว");
   }catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
 }
+const isAdmin = () => sessionStorage.getItem("fe_settings_ok") === "1";
+async function unlockEdit(id){ await askSettingsPw("การแก้ชื่อ ตำแหน่ง หรือลบสถานี ต้องใช้รหัสผ่านตั้งค่า", "ปลดล็อก"); openSheet(id); }
 async function saveName(id){
   if(!user) return toast("เข้าสู่ระบบก่อน");
+  if(!isAdmin()) return toast("ต้องใส่รหัสตั้งค่าก่อน");
   const name = $("#eName").value.trim().replace(/^สถานี(ไฟฟ้า)?(ต้นทาง|ย่อย)?/,"").trim();
   if(!name) return toast("ใส่ชื่อสถานี");
   if(stations.some(x => x.id!==id && x.name===name)) return toast("มีสถานีชื่อนี้อยู่แล้ว");
@@ -641,6 +645,7 @@ async function saveName(id){
 }
 async function deleteStation(id){
   if(!user) return toast("เข้าสู่ระบบก่อน");
+  if(!isAdmin()) return toast("ต้องใส่รหัสตั้งค่าก่อน");
   const s = stations.find(x => x.id === id); if(!s) return;
   if(!confirm(`ลบ${TYPE[s.type]||"สถานี"}${s.name} ออกจากระบบ?\nข้อมูลคะแนนและสถานะของสถานีนี้จะหายไปด้วย`)) return;
   try{ await db.collection("flood_stations").doc(id).delete(); closeSheet(); toast(`ลบสถานี${s.name}แล้ว`); }
@@ -652,6 +657,7 @@ function useGPS(){
     e => toast("อ่านตำแหน่งไม่ได้: "+e.message), {enableHighAccuracy:true, timeout:10000});
 }
 async function saveCoords(id){
+  if(!isAdmin()) return toast("ต้องใส่รหัสตั้งค่าก่อน");
   const lat = parseFloat($("#eLat").value), lng = parseFloat($("#eLng").value);
   if(!(lat>5 && lat<21 && lng>97 && lng<106)) return toast("พิกัดไม่อยู่ในประเทศไทย ตรวจตัวเลขอีกครั้ง");
   try{ await db.collection("flood_stations").doc(id).set({lat,lng,approx:false},{merge:true}); drawMap._fit=false; toast("บันทึกพิกัดแล้ว"); }
@@ -813,7 +819,8 @@ function drawGuide(){
 
   <div class="card"><h3>สิทธิ์การใช้งาน</h3>${gtable(["การใช้งาน","เงื่อนไข"],[
     ["ดูแผนที่ สถานี รายงาน และคู่มือ","ทุกคนที่มีลิงก์"],
-    ["อัปเดตสถานะ แก้พิกัด เพิ่มสถานี","เข้าสู่ระบบด้วยบัญชี Google"],
+    ["อัปเดตสถานะการเข้าถึงสถานี","เข้าสู่ระบบด้วยบัญชี Google"],
+    ["แก้ชื่อ แก้พิกัด เพิ่มหรือลบสถานี","เข้าสู่ระบบ + รหัสผ่านตั้งค่า"],
     ["เข้าหน้าตั้งค่า","ต้องใส่รหัสผ่าน"],
     ["ส่งออกรายชื่อและพิกัดสถานี (CSV)","ต้องใส่รหัสผ่านตั้งค่า"]])}</div>
 
