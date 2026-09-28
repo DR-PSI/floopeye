@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>FloodEye</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FloodEye">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="description" content="เฝ้าระวังน้ำฝนและระดับน้ำคลองที่ใกล้สถานีไฟฟ้า กฟน.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#f3f7fa; --panel:#ffffff; --panel2:#eef4f8; --line:#d5e2ea;
+  --text:#0f2a3a; --muted:#5a7485; --water:#0a84b8;
+  --l0:#1f9d63; --l1:#d9a400; --l2:#ea6a12; --l3:#e03347; --l4:#d4145a; --lx:#1a1a1a;
+  --r:14px;
+  font-family:"IBM Plex Sans Thai",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px}
+.brand img{width:46px;height:auto}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);line-height:1.35}
+.brand small.by{font-size:10px;font-style:italic;opacity:.85}
+header .sp{flex:1}
+.updated{font-size:12px;color:var(--muted);text-align:right}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.btn.pri{background:var(--water);color:#fff;border-color:var(--water);font-weight:600}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+main{flex:1;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow:auto;display:none}
+.view.on{display:block}
+#map{position:absolute;inset:0;background:#e8eef2}
+.pad{padding:16px;max-width:760px;margin:0 auto}
+
+nav{display:flex;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;padding:10px 4px 12px;color:var(--muted);font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button svg{width:22px;height:22px}
+nav button.on{color:var(--water)}
+
+/* summary strip on map */
+.strip{position:absolute;z-index:500;left:12px;right:12px;top:12px;display:flex;gap:6px;overflow-x:auto}
+.chip{cursor:pointer;font-family:inherit;color:var(--text);flex:none;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(15,42,58,.12);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
+.chip.off{opacity:.45;text-decoration:line-through}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+
+/* station list with water gauge */
+.row{display:flex;gap:12px;align-items:stretch;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px;width:100%;text-align:left}
+.gauge{width:18px;border-radius:6px;background:#e6eef3;border:1px solid var(--line);position:relative;overflow:hidden;flex:none;min-height:54px}
+.gauge i{position:absolute;left:0;right:0;bottom:0;transition:height .6s ease}
+.gauge i::before{content:"";position:absolute;left:-4px;right:-4px;top:-3px;height:6px;border-radius:50%;background:inherit;filter:brightness(1.15)}
+.row .body{flex:1;min-width:0}
+.row h3{margin:0 0 2px;font-size:16px;font-weight:600}
+.row .meta{font-size:13px;color:var(--muted)}
+.lvl{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;color:#fff}
+.score{font-size:22px;font-weight:700;align-self:center;min-width:44px;text-align:right}
+.filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filters button{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+.filters button.on{border-color:var(--water);color:var(--water)}
+
+/* sheet */
+.sheet-bg{position:fixed;inset:0;background:rgba(15,42,58,.35);z-index:1099;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:1100;background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(15,42,58,.15);max-height:86vh;overflow:auto;transform:translateY(100%);transition:transform .25s ease;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sheet.on{transform:none}
+.sheet-bg.on{display:block}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet h2{margin:0;font-size:20px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+.kv div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.kv b{display:block;font-size:18px}
+.kv span{font-size:12px;color:var(--muted)}
+.sec{margin-top:16px}
+.sec h4{margin:0 0 8px;font-size:14px;color:var(--muted);font-weight:500}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 6px;font-size:13px}
+.seg button.on{border-color:var(--water);background:#e1f1f9;color:#075f86;font-weight:600}
+.note{font-size:13px;color:var(--muted);line-height:1.6}
+.confirm{border:1px solid var(--l4);background:#fdeaf1;color:#8a0d3b;border-radius:10px;padding:10px;font-size:14px}
+input[type=text],input[type=number],input[type=url],textarea,select{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* report */
+.rep-head{background:linear-gradient(180deg,#dff0f8,#ffffff);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.rep-head h2{margin:0;font-size:20px}
+.rep-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:12px}
+.rep-grid div{text-align:center;border-radius:10px;padding:8px 2px;background:var(--panel2)}
+.rep-grid b{display:block;font-size:22px}
+.rep-grid span{font-size:11px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:12px}
+.card h3{margin:0 0 8px;font-size:16px}
+.card ul{margin:0;padding-left:18px;line-height:1.8;font-size:14px}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:18px;text-align:center;margin-top:12px}
+.drop img{max-width:100%;max-height:220px;border-radius:8px;margin-top:10px}
+.guide h2{font-size:20px;margin:0 0 6px}
+.guide h3{font-size:16px;margin:0 0 8px}
+.guide p{font-size:14px;line-height:1.7;margin:0 0 8px}
+.gt{width:100%;border-collapse:collapse;font-size:14px;margin:4px 0 6px}
+.gt th{background:var(--water);color:#fff;text-align:left;font-weight:600;padding:7px 10px}
+.gt td{border-bottom:1px solid var(--line);padding:7px 10px;vertical-align:top}
+.gt td:first-child{font-weight:500}
+.gt-wrap{overflow-x:auto}
+.guide ol,.guide ul{margin:0;padding-left:20px;font-size:14px;line-height:1.8}
+.lv-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.leaflet-tooltip{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 14px rgba(15,42,58,.18);padding:8px 10px;font-family:inherit}
+.tip{font-size:13px;line-height:1.6;min-width:150px}
+.tip b{font-size:14px}
+.tip .lvl{margin-right:4px}
+.tip-t{color:var(--muted);font-size:12px}
+.ltool{display:flex;gap:8px;margin-bottom:10px}
+.ltool input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.ltool select{width:auto;background:var(--panel)}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:8px}
+@media (max-width:520px){.lgrid{grid-template-columns:1fr}}
+.srow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:10px;padding:9px 12px;width:100%;text-align:left;min-height:64px}
+.srow:hover{box-shadow:0 2px 10px rgba(15,42,58,.08)}
+.srow .nm{font-weight:600;font-size:15px;line-height:1.3}
+.srow .tp{font-size:11px;color:var(--muted);font-weight:500;margin-left:4px}
+.srow .mt{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);margin-top:3px}
+.srow .mt b{color:var(--text);font-weight:600}
+.srow .bd{flex:1;min-width:0}
+.srow .sc{text-align:right;flex:none;min-width:58px}
+.srow .sc b{display:block;font-size:22px;line-height:1;color:var(--c)}
+.srow .sc span{font-size:11px;color:var(--c);font-weight:600}
+.acc{font-size:11px;font-weight:600;padding:1px 6px;border-radius:5px;background:#e8eef2;color:var(--text)}
+.acc.no{background:#fde2e5;color:#b3182c}
+.filters button .n{opacity:.7;margin-left:4px}
+.filters .dot{margin-right:5px;vertical-align:-1px}
+.evpin{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:2px solid var(--ec);box-shadow:0 1px 4px rgba(15,42,58,.35);font-size:13px;line-height:1}
+.evrow{display:flex;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--ec);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.evrow .ic{font-size:20px;line-height:1.2}
+.evrow .t{font-weight:600;font-size:14.5px}
+.evrow .m{font-size:12.5px;color:var(--muted);margin-top:2px}
+.evrow a{color:var(--water)}
+.evph{display:block;max-width:100%;width:260px;max-height:180px;object-fit:cover;border-radius:8px;margin-top:6px;border:1px solid var(--line);background:#eef2f6}
+.evph.sm{width:120px;max-height:84px}
+.modes{position:absolute;z-index:500;right:12px;top:58px;display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 1px 4px rgba(15,42,58,.12)}
+.modes button{border:0;background:none;border-radius:8px;padding:6px 10px;font-size:13px;text-align:left;font-family:inherit;color:var(--text);cursor:pointer}
+.modes button.on{background:#e1f1f9;color:#075f86;font-weight:600}
+.wxg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media (max-width:560px){.wxg{grid-template-columns:1fr}}
+.wxc{background:var(--panel2);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:9px 10px;font-size:13px}
+.wxc b{display:block;font-size:14px;margin-bottom:2px}
+.modes .mcur{display:none}
+@media (max-width:640px){
+  .modes{top:52px;right:8px;padding:3px;gap:2px;border-radius:10px}
+  .modes .mcur{display:flex;align-items:center;gap:4px;font-size:12.5px;padding:5px 8px;font-weight:600;color:#075f86}
+  .modes .mcur .car{font-size:10px;opacity:.7}
+  .modes .mlist{display:none;flex-direction:column;gap:2px}
+  .modes.open .mlist{display:flex}
+  .modes.open .mcur{border-bottom:1px solid var(--line);border-radius:8px 8px 0 0}
+  .modes .mlist button{font-size:12.5px;padding:6px 8px}
+  .strip{left:8px;right:8px;top:8px;gap:4px}
+  .chip{padding:4px 9px;font-size:12px;gap:4px}
+  .chip .dot,.dot{width:8px;height:8px}
+  header{padding:8px 10px;gap:8px}
+  .brand{font-size:16px}
+  .brand img{width:38px}
+  .brand small{font-size:10px}
+  .brand small.by{font-size:9px}
+  .updated{font-size:10.5px}
+  #authBtn,#installBtn{padding:5px 8px;font-size:12px}
+  nav button{font-size:11px;padding:8px 2px 10px}
+  nav button svg{width:20px;height:20px}
+}
+.modes .mlist{display:flex;flex-direction:column;gap:4px}
+@media (max-width:640px){ .modes .mlist{display:none} .modes.open .mlist{display:flex} }
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
+.empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
+.pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
+.pin.pulse{position:relative}
+.pin.pulse::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--pc);animation:ring 2.2s ease-out infinite}
+@keyframes ring{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(2.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pin.pulse,.pin.pulse::after{animation:none}.gauge i,.sheet{transition:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="logo-eye.png" alt="" width="46" height="29" style="display:block">
+    <div>FloodEye<small>ระบบเฝ้าระวังน้ำฝนและระดับน้ำคลองที่ใกล้สถานีไฟฟ้า</small><small class="by">By Dr.Phanuphon S.</small></div>
+  </div>
+  <div class="sp"></div>
+  <div class="updated" id="updated">กำลังโหลด…</div>
+  <button class="btn sm pri" id="installBtn" hidden>ติดตั้งแอป</button>
+  <button class="btn sm" id="authBtn">เข้าสู่ระบบ</button>
+</header>
+
+<main>
+  <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div><div class="modes" id="modes"></div></section>
+  <section class="view" id="v-list"><div class="pad" style="max-width:1200px">
+    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="forecast">เรียงตามคาดการณ์ 3 ชม.</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
+    <div class="filters" id="filters"></div>
+    <div id="list"></div>
+  </div></section>
+  <section class="view" id="v-report"><div class="pad" id="report"></div></section>
+  <section class="view" id="v-events"><div class="pad" style="max-width:900px" id="events"></div></section>
+  <section class="view" id="v-guide"><div class="pad guide" id="guide"></div></section>
+  <section class="view" id="v-settings"><div class="pad" id="settings"></div></section>
+</main>
+
+<nav>
+  <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
+  <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
+  <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
+  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Grid Events</button>
+  <button data-v="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M9 7h6"/></svg>คู่มือ</button>
+  <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============ CONFIG ============ */
+const firebaseConfig = {
+  apiKey: "AIzaSyA9duN7uzwd8LHZuhFj5LBcKSx5k06C-a8",
+  authDomain: "motoreye-b8829.firebaseapp.com",
+  projectId: "motoreye-b8829",
+  storageBucket: "motoreye-b8829.firebasestorage.app",
+  messagingSenderId: "1055859740152",
+  appId: "1:1055859740152:web:0fc2aa85b098ddaac89a0d"
+};
+const DEFAULT_WEBHOOK = "https://n8n.hanuman.sbs/webhook";
+const CONFIRM_TTL_H = 12;
+const SETTINGS_PW_HASH = "6460662e217c7a9f899208dd70a2c28abdea42f128666a9b78e6c0c064846493"; // SHA-256 ของรหัสแท็บตั้งค่า   // รายงาน กฟน. มีผลกี่ชั่วโมง
+
+const LEVELS = [
+  {name:"ปกติ",       color:"var(--l0)", hex:"#1f9d63"},
+  {name:"เฝ้าระวัง",   color:"var(--l1)", hex:"#d9a400"},
+  {name:"เสี่ยงสูง",   color:"var(--l2)", hex:"#ea6a12"},
+  {name:"วิกฤต",      color:"var(--l3)", hex:"#e03347"},
+  {name:"น้ำท่วมขัง",  color:"var(--l4)", hex:"#d4145a"},
+];
+const NODATA = {name:"ไม่มีข้อมูล", color:"var(--lx)", hex:"#1a1a1a"};
+const ACCESS = {
+  normal:{t:"เข้าได้ปกติ"}, high_vehicle:{t:"รถยกสูงเข้าได้"},
+  no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
+};
+const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อน"}, insulator:{ic:"🧂", name:"ลูกถ้วย (เค็ม/ฝุ่น)"}};
+let mapMode = localStorage.getItem("fe_mode") || "flood";
+function wxTip(s, mode){
+  if(mode==="forecast"){ const f = forecastOf(s); return f ? `<div>ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม.</div><div>คะแนนคาดการณ์ ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</div>` : "<div>ยังไม่มีข้อมูลพยากรณ์ฝน</div>"; }
+  const w = s.weather?.[mode]; if(!w) return "";
+  if(mode==="storm") return `<div>ฝน 3 ชม.ข้างหน้า ${w.rain3h ?? "-"} มม. · ลมกระโชก ${w.gustMax ?? "-"} กม./ชม.</div><div>${w.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${w.cape!=null?` · CAPE ${w.cape}`:""}</div>`;
+  if(mode==="heat") return `<div>อุณหภูมิสูงสุด 24 ชม. ${w.tmax ?? "-"} °C · ต่ำสุด ${w.tmin ?? "-"} °C</div>`;
+  return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div>`; }
+const EVK = {flood:{name:"น้ำท่วม", ic:"🌊", hex:"#0284c7"}, wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
+let gridEvents = [], evFilter = "all", evPhotoOnly = false;
+const evPhoto = (e, big) => e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
+let showEv = localStorage.getItem("fe_show_ev") === "1";
+let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
+const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
+const recentEvents = () => gridEvents.filter(e => Date.now() - new Date(e.at).getTime() < 24*36e5);
+const eventsFor = s => recentEvents().filter(e => e.stationId === s.id || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === s.id)));
+/* สรุปสถานการณ์น้ำรอบสถานีจากรายงานประชาชน (Traffy/Longdo ใน Grid Events) — กฎตายตัว ไม่ใช้ AI */
+const DEPTH_WORDS = [[/ข้อเท้า/,10],[/หน้าแข้ง|ครึ่งแข้ง/,25],[/เข่า/,45],[/ต้นขา|โคนขา/,60],[/เอว|สะเอว/,85],[/หน้าอก|ระดับอก|ถึงอก/,110],[/ระดับคอ|ถึงคอ|ท่วมคอ/,140],[/มิดชั้น|ท่วมมิด|มิดหลังคา/,150]];
+function depthOf(t){
+  t = String(t||""); let cm = null;
+  const m = t.match(/(\d{1,3})\s*(ซม|เซน|cm)/i); if(m) cm = +m[1];
+  const mm = t.match(/(\d(?:\.\d)?)\s*(เมตร|ม\.)(?!\S*รทก)/); if(mm && +mm[1] <= 3) cm = Math.max(cm||0, Math.round(+mm[1]*100));
+  for(const [re,v] of DEPTH_WORDS) if(re.test(t)) cm = Math.max(cm||0, v);
+  return cm;
+}
+const isReceding = t => /น้ำลด|เริ่มลด|ลดลงแล้ว|แห้งแล้ว|ระบายหมด|ไม่ท่วมแล้ว/.test(t) && !/ไม่.{0,6}ลด/.test(t);
+const isRising = t => /สูงขึ้น|เพิ่มขึ้น|ยังตก|ไม่.{0,6}ลด|ขยาย/.test(t);
+const AI_ST = {flooding:["ยังท่วม",2], receding:["น้ำเริ่มลด",1], dry:["น้ำลดแล้ว",0], unclear:["ข้อมูลไม่ชัดเจน",1]};
+const AI_TR = {rising:"น้ำมีแนวโน้มสูงขึ้น", steady:"ระดับน้ำทรงตัว", falling:"น้ำกำลังลด"};
+const AI_AC = {normal:"รถทั่วไปเข้าได้", high_vehicle:"ควรใช้รถยกสูง", blocked:"รถเข้าไม่ได้"};
+/* ชื่อที่แสดงในแอป: claude-haiku-4-5-20251001 → JUPETOR model 4-5-20251001 (ใน Firestore ยังเก็บชื่อเต็มไว้ตรวจสอบย้อนหลัง) */
+const modelLabel = m => m ? String(m).replace(/^claude-[a-z]+-/i, "JUPETOR model ") : "JUPETOR model";
+function aiFloodOf(s){
+  const a = s.aiFlood; if(!a || !a.updatedAt || hoursAgo(a.updatedAt) > 12) return null;
+  const [name, lv0] = AI_ST[a.status] || AI_ST.unclear;
+  const level = a.status === "flooding" && (a.trend === "rising" || (a.depthMax||0) >= 30) ? 3 : lv0;
+  return {...a, name, level};
+}
+function floodSummaryOf(s){
+  const now = Date.now();
+  const ev = eventsFor(s).filter(e => e.kind === "flood" && (e.distKm ?? 0) <= 3).map(e => ({...e, t: new Date(e.at).getTime(), txt: (e.title||"") + " " + (e.address||"")}));
+  if(!ev.length) return null;
+  ev.sort((a,b) => b.t - a.t);
+  const h = e => (now - e.t) / 3600e3;
+  const r6 = ev.filter(e => h(e) <= 6), prev6 = ev.filter(e => h(e) > 6 && h(e) <= 12);
+  const latest = ev[0], lastH = h(latest);
+  const done = e => /เสร็จสิ้น|สิ้นสุดแล้ว/.test(e.state || "");
+  const recent = ev.slice(0, 3);
+  const receding = recent.some(e => isReceding(e.txt)) || (recent.length && recent.every(done));
+  const rising = r6.some(e => isRising(e.txt));
+  const depths = r6.map(e => depthOf(e.txt)).filter(v => v != null);
+  const road = riskOf(s)?.road;
+  if(road && road.maxCm >= 5 && hoursAgo(road.at) <= 3) depths.push(road.maxCm);
+  let status, level;
+  if(receding && lastH <= 6){ status = "น้ำเริ่มลด"; level = 1; }
+  else if(lastH <= 3){ status = rising ? "ยังท่วม · มีแนวโน้มสูงขึ้น" : "ยังท่วม"; level = rising || (Math.max(0,...depths) >= 30) ? 3 : 2; }
+  else if(lastH <= 12){ status = "อาจยังท่วม (ไม่มีรายงานใหม่ใน 3 ชม.)"; level = 1; }
+  else { status = "ไม่มีรายงานใหม่ใน 12 ชม."; level = 0; }
+  const trend = r6.length > prev6.length ? "รายงานเพิ่มขึ้น" : r6.length < prev6.length ? "รายงานลดลง" : "";
+  return {status, level, count6: r6.length, count24: ev.length, trend, depthMax: depths.length ? Math.max(...depths) : null, depthMin: depths.length ? Math.min(...depths) : null, latestAt: latest.at};
+}
+
+/* สถานีจากรายงาน กฟน. 26 ก.ย. 2569 — พิกัดจาก Google Maps */
+const SEED = [
+  {id:"nongchok", name:"หนองจอก", type:"terminal", lat:13.814339, lng:100.802980, approx:false},
+  {id:"khlongroi", name:"คลองร้อย", type:"sub", lat:13.555107, lng:100.773559, approx:false},
+  {id:"donmueang", name:"ดอนเมือง", type:"sub", lat:13.882433, lng:100.585367, approx:false},
+  {id:"ramkhamhaeng", name:"รามคำแหง", type:"sub", lat:13.758146, lng:100.627451, approx:false},
+  {id:"nana", name:"นานา", type:"sub", lat:13.750147, lng:100.555194, approx:false},
+  {id:"bangphli", name:"บางพลี", type:"terminal", lat:13.640355, lng:100.689646, approx:false},
+];
+
+/* ============ STATE ============ */
+// ใช้ app ชื่อ "floodeye" แยก session login ออกจาก MotorEye (โปรเจกต์/โดเมนเดียวกัน)
+const fbApp = firebase.initializeApp(firebaseConfig, "floodeye");
+const db = fbApp.firestore();
+const auth = fbApp.auth();
+let user = null, stations = [], reports = [], filter = "all", openId = null;
+let demo = localStorage.getItem("fe_demo") === "1";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const webhook = () => (localStorage.getItem("fe_webhook") || DEFAULT_WEBHOOK).replace(/\/$/, "");
+const hoursAgo = iso => iso ? (Date.now() - new Date(iso).getTime()) / 36e5 : Infinity;
+function thTime(iso){
+  if(!iso) return "-";
+  const d = new Date(iso);
+  return d.toLocaleString("th-TH",{day:"numeric",month:"short",year:"2-digit",hour:"2-digit",minute:"2-digit"}) + " น.";
+}
+function toast(msg, ms=2600){ const t=$("#toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",ms); }
+
+/* ============ LEVEL LOGIC ============ */
+function riskOf(s){
+  if(s.risk && s.risk.score != null) return s.risk;
+  if(!demo) return null;
+  // โหมดตัวอย่าง: ค่าจำลองคงที่ต่อสถานี
+  let h = 0; for(const c of s.id) h = (h*31 + c.charCodeAt(0)) % 997;
+  const rain = (h % 120), wl = 40 + (h % 60), traffy = h % 5;
+  const score = Math.min(100, Math.round(rain*0.3 + Math.max(0,wl-60)*0.8 + traffy*8));
+  return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
+}
+const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
+const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
+function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
+/* คาดการณ์ 3 ชม.: ฝนสะสม (ThaiWater) + ฝนที่จะตกอีก 3 ชม. (Open-Meteo จาก Weather Risk) — เกณฑ์ต้องตรงกับ Compute Risk ใน n8n */
+const fRainPts = mm => mm>=150?65 : mm>=120?55 : mm>=90?45 : mm>=60?30 : mm>=35?15 : mm>=10?5 : 0;
+const fWlPts = p => p>=100?35 : p>=90?25 : p>=80?15 : p>=70?6 : 0;
+const fRepPts = n => Math.min(30, n*8);
+const fRoadPts = cm => cm>=30?20 : cm>=20?15 : cm>=10?8 : 0;
+function forecastOf(s){
+  const r = riskOf(s), w = s.weather;
+  const r3 = w?.storm?.rain3h;
+  if(r3 == null || !w.updatedAt || hoursAgo(w.updatedAt) > 2) return null;
+  const now = r && !isNoData(r) ? r : null;
+  const rainTotal = Math.round(((now?.rain24h ?? 0) + r3) * 10) / 10;
+  const score = Math.min(100, fRainPts(rainTotal) + fWlPts(now?.wlPercent || 0) + fRoadPts(now?.road?.maxCm || 0) + fRepPts(now ? (now.traffyCount||0)+(now.longdoCount||0) : 0));
+  const level = scoreToLevel(score), nowLevel = levelOf(s);
+  return {rain3h: r3, rainTotal, score, level: Math.max(level, nowLevel === 4 ? 4 : level), nowScore: now?.score ?? null, up: nowLevel < 4 && level > nowLevel};
+}
+function isConfirmed(s){ return s.confirmed && s.confirmed.flooded && hoursAgo(s.confirmed.reportAt) < CONFIRM_TTL_H; }
+function levelOf(s){
+  if(isConfirmed(s)) return 4;
+  const r = riskOf(s); return r && !isNoData(r) ? r.level : -1;
+}
+const LV = lv => lv < 0 ? NODATA : LEVELS[lv];
+function gaugePct(s){ const lv=levelOf(s); if(lv===4) return 100; const r=riskOf(s); return r ? Math.max(4, r.score) : 0; }
+function accessOf(s){
+  const a = s.access, c = s.confirmed;
+  if(a && c && c.accessAt && new Date(c.accessAt) > new Date(a.at || 0)) return {status:c.access, note:c.accessNote, at:c.accessAt, by:"รายงาน กฟน."};
+  if(a) return a;
+  if(c && c.access) return {status:c.access, note:c.accessNote, at:c.accessAt, by:"รายงาน กฟน."};
+  return null;
+}
+
+/* ============ MAP ============ */
+const map = L_init();
+function L_init(){
+  const m = window.L.map("map",{zoomControl:false,attributionControl:true}).setView([13.76,100.62],10);
+  window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19}).addTo(m);
+  window.L.control.zoom({position:"bottomright"}).addTo(m);
+  return m;
+}
+let markers = {}, radiusLayer = null;
+let hiddenLv = new Set(JSON.parse(localStorage.getItem("fe_hidden") || "[]"));
+const BASE_SIZE = {"-1":8, 0:8, 1:10, 2:12, 3:14, 4:14};
+function pinScale(){ const z = map.getZoom(); return z >= 14 ? 1.7 : z >= 13 ? 1.45 : z >= 12 ? 1.2 : 1; }
+function drawMap(){
+  Object.values(markers).forEach(mk => mk.remove()); markers = {};
+  const pts = [], k = pinScale();
+  for(const s of stations){
+    if(s.lat == null || s.lng == null) continue;
+    pts.push([s.lat,s.lng]);
+    const lv = mapLevel(s); if(hiddenLv.has(lv)) continue;
+    const c = LV(lv).hex, size = Math.round(BASE_SIZE[lv] * k);
+    const icon = window.L.divIcon({className:"", iconSize:[size,size],
+      html:`<div class="pin ${lv>=3?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
+    const mk = window.L.marker([s.lat,s.lng],{icon, zIndexOffset:(lv+1)*1000}).addTo(map);
+    const r = riskOf(s), lvl = LV(lv);
+    mk.bindTooltip(mapMode === "flood" ? `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
+      <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
+      ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด</div>`:""}
+      <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`
+      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${s.weather?.updatedAt ? "อัปเดต "+thTime(s.weather.updatedAt) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
+      {direction:"top", offset:[0,-size/2-4], opacity:1});
+    mk.on("click", ()=>openSheet(s.id));
+    markers[s.id] = mk;
+  }
+  for(const e of (showEv ? recentEvents() : [])){
+    if(hiddenEv.has(e.kind) || e.lat == null) continue;
+    const K = EVK[e.kind] || EVK.wire, sz = Math.round(20 * Math.min(k, 1.3));
+    const mk = window.L.marker([e.lat, e.lng], {zIndexOffset: 6000, icon: window.L.divIcon({className:"", iconSize:[sz,sz],
+      html:`<div class="evpin" style="width:${sz}px;height:${sz}px;--ec:${K.hex}">${K.ic}</div>`})}).addTo(map);
+    mk.bindTooltip(`<div class="tip"><b>${K.ic} ${esc(e.title)}</b><div>${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}</div><div>ใกล้${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)} ${e.distKm} กม.</div></div>`, {direction:"top", offset:[0,-sz/2-2], opacity:1});
+    mk.on("click", () => openSheet(e.stationId));
+    markers["ev_"+e.id] = mk;
+  }
+  if(pts.length && !drawMap._fit){ drawMap._fit = true; fitStations(pts); }
+  // summary strip — กดเพื่อซ่อน/แสดง
+  const counts = {"-1":0,0:0,1:0,2:0,3:0,4:0};
+  stations.forEach(s => counts[mapLevel(s)]++);
+  const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
+  const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
+  $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
+    + (!showEv ? "" : Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join(""));
+  $("#modes").innerHTML = `<button class="mcur" data-toggle="1" aria-label="เลือกมุมมองแผนที่">${MODES[mapMode].ic}<span class="mt">${MODES[mapMode].name}</span><span class="car">▾</span></button>`
+    + `<div class="mlist">` + Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("") + `</div>`;
+}
+$("#strip").addEventListener("click", e => {
+  const be = e.target.closest("button[data-ev]");
+  if(be){ const k = be.dataset.ev; hiddenEv.has(k) ? hiddenEv.delete(k) : hiddenEv.add(k); localStorage.setItem("fe_hidden_ev", JSON.stringify([...hiddenEv])); return drawMap(); }
+  const b = e.target.closest("button[data-lv]"); if(!b) return;
+  const lv = +b.dataset.lv; hiddenLv.has(lv) ? hiddenLv.delete(lv) : hiddenLv.add(lv);
+  localStorage.setItem("fe_hidden", JSON.stringify([...hiddenLv])); drawMap();
+});
+// จัดมุมมองให้เห็นทุกสถานีใน กทม. นนทบุรี สมุทรปราการ (ตัดพิกัดที่หลุดพื้นที่ออก)
+function fitStations(pts){
+  const inArea = pts.filter(([la,ln]) => la>13.3 && la<14.3 && ln>100.2 && ln<101.1);
+  const use = inArea.length ? inArea : pts;
+  map.invalidateSize();
+  map.fitBounds(use, {padding:[60,60], maxZoom:12});
+  if(map.getZoom() < 9) map.setView([13.76,100.62], 10);
+}
+const FitCtl = window.L.Control.extend({ options:{position:"bottomright"},
+  onAdd(){ const b = window.L.DomUtil.create("button","btn sm"); b.title="แสดงทุกสถานี"; b.textContent="⤢ ทุกสถานี";
+    b.style.cssText="background:#fff;border:1px solid var(--line);box-shadow:0 1px 4px rgba(15,42,58,.15)";
+    window.L.DomEvent.on(b,"click",e=>{ window.L.DomEvent.stop(e); fitStations(stations.filter(s=>s.lat!=null).map(s=>[s.lat,s.lng])); }); return b; } });
+new FitCtl().addTo(map);
+map.on("zoomend", () => drawMap());
+$("#modes").addEventListener("click", e => {
+  if(e.target.closest("button[data-toggle]")) return $("#modes").classList.toggle("open");
+  const b = e.target.closest("button[data-mode]"); if(!b) return;
+  mapMode = b.dataset.mode; localStorage.setItem("fe_mode", mapMode); $("#modes").classList.remove("open"); drawMap(); });
+map.on("click", () => $("#modes").classList.remove("open"));
+
+/* ============ LIST ============ */
+let listQ = "", listSort = "score";
+function drawList(){
+  const cnt = {"-1":0,0:0,1:0,2:0,3:0,4:0}; stations.forEach(s => cnt[levelOf(s)]++);
+  const lvChip = lv => { const I = LV(lv); return [String(lv), `<span class="dot" style="display:inline-block;background:${I.hex}"></span>${I.name}<span class="n">${cnt[lv]+(lv===3?cnt[4]:0)}</span>`]; };
+  const fs = [["all",`ทั้งหมด<span class="n">${stations.length}</span>`], lvChip(3), lvChip(2), lvChip(1), lvChip(0), lvChip(-1)];
+  const nopin = stations.filter(s => s.lat == null).length;
+  if(nopin) fs.push(["nopin",`ยังไม่ปักหมุด<span class="n">${nopin}</span>`]);
+  if(!fs.some(([k]) => k === filter)) filter = "all";
+  $("#filters").innerHTML = fs.map(([k,t]) => `<button data-f="${k}" class="${filter===k?"on":""}">${t}</button>`).join("")
+    + (stations.length ? `<button data-f="__export" style="margin-left:auto">ส่งออก CSV</button>` : "");
+  if(!stations.length){
+    $("#list").innerHTML = `<div class="empty">ยังไม่มีสถานีในระบบ<br><button class="btn pri" style="margin-top:12px" onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button></div>`;
+    return;
+  }
+  let arr = stations.slice();
+  if(filter === "nopin") arr = arr.filter(s => s.lat == null);
+  else if(filter !== "all"){ const f = +filter; arr = arr.filter(s => { const lv = levelOf(s); return f===3 ? lv>=3 : lv===f; }); }
+  const q = listQ.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"");
+  if(q) arr = arr.filter(s => String(s.name).includes(q));
+  const sc = s => riskOf(s)?.score || 0, rn = s => riskOf(s)?.rain24h ?? -1, rp = s => { const r = riskOf(s); return r ? (r.traffyCount||0)+(r.longdoCount||0) : 0; };
+  const byName = (a,b) => String(a.name).localeCompare(String(b.name),"th");
+  const sorters = {
+    score: (a,b) => (levelOf(b)-levelOf(a)) || (sc(b)-sc(a)) || byName(a,b),
+    forecast: (a,b) => ((forecastOf(b)?.score ?? -1)-(forecastOf(a)?.score ?? -1)) || (sc(b)-sc(a)) || byName(a,b),
+    rain: (a,b) => (rn(b)-rn(a)) || byName(a,b),
+    reports: (a,b) => (rp(b)-rp(a)) || (sc(b)-sc(a)) || byName(a,b),
+    name: byName };
+  arr.sort(sorters[listSort] || sorters.score);
+  if(!arr.length){ $("#list").innerHTML = `<div class="empty">ไม่พบสถานี${q?`ที่ชื่อมี "${esc(q)}"`:"ในกลุ่มนี้"}</div>`; return; }
+  $("#list").innerHTML = `<div class="lgrid">` + arr.map(s => {
+    const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s), nd = !r || isNoData(r);
+    const mt = [];
+    if(nd) mt.push(r ? "ไม่มีสถานีวัดในรัศมี 15 กม." : "รอข้อมูลจาก n8n");
+    else {
+      mt.push(`ฝน <b>${r.rain24h ?? "-"}</b> มม.${r.rainStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
+      if(r.wlPercent != null) mt.push(`น้ำคลอง <b>${Math.round(r.wlPercent)}%</b>${r.wlStale?` <span title="ThaiWater ไม่ตอบรอบนี้ ใช้ค่ารอบก่อน">⏱</span>`:""}`);
+      if(r.road && r.road.maxCm >= 5) mt.push(`ถนนน้ำ <b>${r.road.maxCm}</b> ซม.`);
+      const fai = aiFloodOf(s), fs = fai ? {level: fai.level, status: fai.name} : floodSummaryOf(s);
+      if(fs && fs.level >= 2) mt.push(`<b style="color:${fs.level>=3?"var(--l3)":"var(--l2)"}">🌊 ${fs.status.split(" · ")[0]}${fai?" 🤖":""}</b>`);
+      const n = rp(s); if(n) mt.push(`แจ้งน้ำท่วม <b>${n}</b> จุด`);
+      const f = forecastOf(s); if(f && f.up) mt.push(`<b style="color:${LV(f.level).hex}">⏳ ${LV(f.level).name}ใน 3 ชม.</b>`);
+    }
+    if(s.lat == null) mt.push("ยังไม่ปักหมุด");
+    const acc = a && a.status && a.status!=="unknown" ? `<span class="acc ${a.status==="no_access"?"no":""}">${ACCESS[a.status]?.t}</span>` : "";
+    return `<button class="srow" style="--c:${lvl.hex}" onclick="openSheet('${esc(s.id)}')">
+      <span class="bd"><span class="nm">${esc(s.name)}</span><span class="tp">${esc(TYPE[s.type]||"")}</span> ${acc}
+        <span class="mt">${mt.map(x=>`<span>${x}</span>`).join("")}</span></span>
+      <span class="sc"><b>${nd?"–":(r?.score ?? "–")}</b><span>${lvl.name}</span></span>
+    </button>`;
+  }).join("") + `</div>`;
+}
+$("#filters").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; if(b.dataset.f==="__export") return exportStations(); filter=b.dataset.f; drawList(); });
+$("#lq").addEventListener("input", e => { listQ = e.target.value; drawList(); });
+$("#lsort").addEventListener("change", e => { listSort = e.target.value; drawList(); });
+
+/* ============ DETAIL SHEET ============ */
+function openSheet(id){ openId = id; drawSheet(); $("#sheet").classList.add("on"); $("#sheetBg").classList.add("on"); }
+function closeSheet(){ openId = null; $("#sheet").classList.remove("on"); $("#sheetBg").classList.remove("on"); }
+$("#sheetBg").onclick = closeSheet;
+function drawSheet(){
+  const s = stations.find(x => x.id === openId); if(!s) return closeSheet();
+  const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s), c = s.confirmed;
+  const can = !!user;
+  $("#sheet").innerHTML = `<div class="grab"></div>
+    <div style="display:flex;align-items:start;gap:10px">
+      <div style="flex:1"><h2>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</h2>
+      <span class="lvl" style="background:${lvl.hex};margin-top:6px">${lvl.name}${r&&lv<4?` · คะแนน ${r.score}`:""}</span>
+      ${r&&r.demo?`<span class="note"> ค่าจำลอง</span>`:""}</div>
+      <button class="btn sm" onclick="closeSheet()" aria-label="ปิด">ปิด</button>
+    </div>
+    ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
+    <div class="kv">
+      <div><b>${r?.rain24h ?? "-"}<small> มม.</small></b><span>ฝนสะสม 24 ชม.${r?.rainStale?` · ⏱ ค่าจากรอบก่อน (${thTime(r.rainAt)})`:""}${r?.rainDistKm!=null?` · สถานีวัดห่าง ${r.rainDistKm} กม.`:(r&&r.rain24h==null?" · ไม่มีสถานีวัดใกล้":"")}</span></div>
+      <div><b>${r?.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</b><span>ระดับน้ำคลองใกล้สุด${r?.wlStale?` · ⏱ ค่าจากรอบก่อน (${thTime(r.wlAt)})`:""}${r?.wlStation?`<br>${esc(r.wlStation)}${r.wlDistKm!=null?` · ${r.wlDistKm} กม.`:""}`:""}</span></div>
+      <div><b>${r ? (r.traffyCount||0)+(r.longdoCount||0) : "-"}</b><span>จุดแจ้งน้ำท่วม Traffy + Longdo (1.5 กม.)</span></div>
+      <div><b>${r?.updatedAt ? thTime(r.updatedAt).replace(" น.","") : "-"}</b><span>ประเมินล่าสุด</span></div>
+    </div>
+    ${r&&r.road?`<div class="sec"><h4>น้ำท่วมถนนรอบสถานี (เซนเซอร์ กทม. รัศมี 1 กม.)</h4><p class="note" style="margin:0">${r.road.maxCm>=5?`<b style="color:${r.road.maxCm>=20?"var(--l3)":r.road.maxCm>=10?"var(--l2)":"var(--l1)"}">น้ำบนถนน ${r.road.maxCm} ซม.</b>`:"ถนนแห้ง"} · ${esc(r.road.name||"-")} · ห่าง ${r.road.distKm} กม. · วัดเมื่อ ${thTime(r.road.at)}${r.road.sensors>1?`<br>เซนเซอร์ในรัศมี ${r.road.sensors} จุด มีน้ำตั้งแต่ 10 ซม. ${r.road.wet} จุด`:""}${r.road.maxCm>=20?"<br>น้ำ 20 ซม. ขึ้นไป รถเก๋งผ่านลำบาก ควรใช้รถยกสูง":""}</p></div>`:""}
+    ${(()=>{ const f = forecastOf(s); if(!f) return ""; const L = LV(f.level);
+      return `<div class="sec"><h4>⏳ คาดการณ์ 3 ชม. ข้างหน้า</h4><p style="margin:0 0 4px"><span class="lvl" style="background:${L.hex}">${L.name}</span> คะแนนคาด ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</p>
+        <p class="note" style="margin:0">ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. → ฝนรวมประมาณ ${f.rainTotal} มม. · พยากรณ์จาก Open-Meteo อัปเดต ${thTime(s.weather.updatedAt)}<br>เป็นค่าพยากรณ์ อาจคลาดเคลื่อนทั้งปริมาณและตำแหน่งฝน</p></div>`; })()}
+    ${r&&r.reports?`<div class="sec"><h4>รายงานน้ำท่วมในรัศมี 3 กม. (Traffy + Longdo)</h4>${r.reports.length?`<ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.${x.ageH!=null?` · ${x.ageH<1?"ไม่ถึง 1":Math.round(x.ageH)} ชม.ก่อน`:""}${x.active===false?" · <b>สิ้นสุดแล้ว</b>":""}</li>`).join("")}</ul><p class="note" style="margin-top:4px">นับเป็นคะแนนเฉพาะรายงานที่ยังไม่สิ้นสุดในรัศมี 1.5 กม.</p>`:`<p class="note">ไม่มีรายงานน้ำท่วมในรัศมี 3 กม. ช่วง 6 ชม. ที่ผ่านมา</p>`}</div>`:""}
+    ${s.cctv?(()=>{ const c=s.cctv, names=["ถนนแห้ง","ถนนเปียก","น้ำขังขอบถนน","น้ำท่วมผิวถนน","น้ำท่วมสูง"], cols=["#1f9d63","#8aa0ad","#d9a400","#ea6a12","#e03347"];
+      const vis={night:"กลางคืน",blurred:"ภาพเบลอ",obstructed:"มีสิ่งบัง",offline:"กล้องออฟไลน์"}[c.visibility];
+      return `<div class="sec"><h4>กล้อง CCTV · ${esc(c.camera)} · ห่าง ${c.distKm} กม.</h4>
+        <img src="${esc(c.imgUrl)}&t=${Date.now()}" alt="ภาพจากกล้อง ${esc(c.camera)}" style="width:100%;border-radius:10px;border:1px solid var(--line);background:#e6eef3;min-height:120px" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'note',textContent:'โหลดภาพกล้องไม่ได้'}))">
+        <p style="margin:8px 0 2px"><span class="lvl" style="background:${cols[c.level]??"#8aa0ad"}">AI: ${names[c.level]??"-"}</span>
+        ${c.depthCm!=null?` ประมาณ ${c.depthCm} ซม.`:""}${c.raining?" · ฝนตก":""}${vis?` · ${vis}`:""}</p>
+        <p class="note">${esc(c.note)}<br>อ่านเมื่อ ${thTime(c.at)} · ความมั่นใจ ${Math.round((c.confidence||0)*100)}% · ภาพด้านบนเป็นภาพสด ไม่ได้บันทึกไว้</p></div>`; })():""}
+    ${s.gistda ? `<div class="sec"><h4>ดาวเทียม GISTDA (7 วัน)</h4><div class="note">${s.gistda.c3k ? `พบน้ำท่วม ${s.gistda.c500} ช่องในรัศมี 500 ม. · ${s.gistda.c1k} ช่องใน 1 กม. · ${s.gistda.c3k} ช่องใน 3 กม.` : "ดาวเทียมไม่เห็นน้ำในรัศมี 3 กม. (ดาวเทียมมักมองไม่เห็นน้ำท่วมถนนในเมือง)"}${s.gistda.latestAt ? ` · ภาพล่าสุด ${esc(s.gistda.latestAt)}` : ""} · <a href="gistda.html">ดูแผนที่</a></div></div>` : ""}
+    ${(()=>{ const f = floodSummaryOf(s); if(!f) return ""; const c = ["var(--l0)","var(--l1)","var(--l2)","var(--l3)"][f.level];
+      const ai = aiFloodOf(s), LC = ["var(--l0)","var(--l1)","var(--l2)","var(--l3)"];
+      const aiHtml = ai ? `<div style="background:var(--panel2);border-radius:8px;padding:8px 10px;margin:0 0 8px"><div style="font-size:12px;color:var(--muted)">🤖 สรุปโดย AI</div>
+        <b style="color:${LC[ai.level]}">${ai.name}</b>${AI_TR[ai.trend]?` · ${AI_TR[ai.trend]}`:""}${ai.depthMax!=null?` · น้ำ ${ai.depthMin!=null&&ai.depthMin!==ai.depthMax?`${ai.depthMin}–`:""}${ai.depthMax} ซม.`:""}${AI_AC[ai.access]?` · ${AI_AC[ai.access]}`:""}
+        ${ai.summary?`<p style="margin:4px 0 0">${esc(ai.summary)}</p>`:""}<div class="note" style="margin-top:4px">จากรายงาน ${ai.reports} เรื่อง · ${esc(modelLabel(ai.model))} · อัปเดต ${agoTxt(ai.updatedAt)} · AI อาจสรุปผิดพลาด</div></div>` : "";
+      return `<div class="sec"><h4>🌊 สรุปน้ำท่วมรอบสถานี (รัศมี 3 กม.)</h4>${aiHtml}<p style="margin:0 0 4px">${ai?`<span class="note">สรุปจากกฎ:</span> `:""}<b style="color:${c}">${f.status}</b></p>
+        <p class="note" style="margin:0">รายงานใน 6 ชม. ${f.count6} เรื่อง (24 ชม. ${f.count24} เรื่อง)${f.trend?` · ${f.trend}`:""} · ล่าสุด ${agoTxt(f.latestAt)}${f.depthMax!=null?`<br>ระดับน้ำที่มีการรายงาน ${f.depthMin===f.depthMax?`ประมาณ ${f.depthMax}`:`${f.depthMin}–${f.depthMax}`} ซม.`:""}<br>สรุปจากข้อความที่ประชาชนแจ้ง อาจคลาดเคลื่อน ควรดูรูปประกอบ</p></div>`; })()}
+    ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
+    ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
+      const st=w.storm||{}, ht=w.heat||{}, ins=w.insulator||{};
+      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
+        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}</div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อน 24 ชม. · ${L3(ht.level).name}</b>สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}</div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ลูกถ้วย · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}</div>
+      </div></div>`; })():""}
+    <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
+      <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
+      ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
+    </div>
+    ${can?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
+      <div class="two"><input type="text" id="eName" value="${esc(s.name)}" placeholder="ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)">
+      <select id="eType"><option value="sub" ${s.type!=="terminal"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option></select></div>
+      <div class="seg" style="margin-top:8px"><button onclick="saveName('${esc(s.id)}')">บันทึกชื่อ</button></div></div>`:""}
+    <div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
+      <div class="two"><input type="number" step="any" id="eLat" placeholder="ละติจูด" value="${s.lat??""}" ${can?"":"disabled"}>
+      <input type="number" step="any" id="eLng" placeholder="ลองจิจูด" value="${s.lng??""}" ${can?"":"disabled"}></div>
+      <div class="seg" style="margin-top:8px">
+        <button ${can?"":"disabled"} onclick="useGPS()">ใช้ตำแหน่งปัจจุบัน</button>
+        <button ${can?"":"disabled"} onclick="saveCoords('${esc(s.id)}')">บันทึกพิกัด</button>
+      </div>
+    </div>
+    ${can?`<div class="sec"><button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" onclick="deleteStation('${esc(s.id)}')">ลบสถานีนี้</button></div>`:""}
+    <p class="note sec">คะแนนเสี่ยงคำนวณจากข้อมูลรอบสถานี ไม่ได้วัดน้ำในรั้วสถานีโดยตรง</p>`;
+}
+async function setAccess(id, status){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  try{
+    await db.collection("flood_stations").doc(id).set({access:{status, at:new Date().toISOString(), by:user.displayName||user.email}},{merge:true});
+    toast("บันทึกสถานะการเข้าถึงแล้ว");
+  }catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
+}
+async function saveName(id){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  const name = $("#eName").value.trim().replace(/^สถานี(ไฟฟ้า)?(ต้นทาง|ย่อย)?/,"").trim();
+  if(!name) return toast("ใส่ชื่อสถานี");
+  if(stations.some(x => x.id!==id && x.name===name)) return toast("มีสถานีชื่อนี้อยู่แล้ว");
+  try{ await db.collection("flood_stations").doc(id).set({name, type:$("#eType").value},{merge:true}); toast("บันทึกชื่อแล้ว"); }
+  catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
+}
+async function deleteStation(id){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  const s = stations.find(x => x.id === id); if(!s) return;
+  if(!confirm(`ลบ${TYPE[s.type]||"สถานี"}${s.name} ออกจากระบบ?\nข้อมูลคะแนนและสถานะของสถานีนี้จะหายไปด้วย`)) return;
+  try{ await db.collection("flood_stations").doc(id).delete(); closeSheet(); toast(`ลบสถานี${s.name}แล้ว`); }
+  catch(e){ toast("ลบไม่สำเร็จ: "+e.message); }
+}
+function useGPS(){
+  if(!navigator.geolocation) return toast("อุปกรณ์นี้ไม่รองรับตำแหน่ง");
+  navigator.geolocation.getCurrentPosition(p => { $("#eLat").value=p.coords.latitude.toFixed(6); $("#eLng").value=p.coords.longitude.toFixed(6); toast("ได้ตำแหน่งแล้ว กดบันทึกพิกัด"); },
+    e => toast("อ่านตำแหน่งไม่ได้: "+e.message), {enableHighAccuracy:true, timeout:10000});
+}
+async function saveCoords(id){
+  const lat = parseFloat($("#eLat").value), lng = parseFloat($("#eLng").value);
+  if(!(lat>5 && lat<21 && lng>97 && lng<106)) return toast("พิกัดไม่อยู่ในประเทศไทย ตรวจตัวเลขอีกครั้ง");
+  try{ await db.collection("flood_stations").doc(id).set({lat,lng,approx:false},{merge:true}); drawMap._fit=false; toast("บันทึกพิกัดแล้ว"); }
+  catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
+}
+
+/* ============ REPORT ============ */
+let pendingImg = null;
+function drawReport(){
+  const groups = {3:[],2:[],1:[],0:[],"-1":[]};
+  stations.forEach(s => { const lv = levelOf(s); (groups[lv] || groups[3]).push(s); });
+  Object.values(groups).forEach(g => g.sort((a,b)=>((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th")));
+  const order = [3,2,1,0,-1], info = lv => lv<0 ? NODATA : LEVELS[lv];
+  const row = s => { const r = riskOf(s), a = accessOf(s), nd = !r || isNoData(r);
+    const bits = nd ? ["ไม่มีสถานีวัดใกล้"] : [`คะแนน ${r.score}`, `ฝน ${r.rain24h ?? "-"} มม.`];
+    if(!nd && r.wlPercent != null) bits.push(`น้ำคลอง ${Math.round(r.wlPercent)}%`);
+    const rc = r ? (r.traffyCount||0)+(r.longdoCount||0) : 0; if(rc) bits.push(`แจ้งน้ำท่วม ${rc} จุด`);
+    if(a && a.status && a.status!=="unknown") bits.push(ACCESS[a.status]?.t);
+    return `<li><a href="#" onclick="openSheet('${esc(s.id)}');return false" style="color:inherit">${esc(TYPE[s.type]||"")}${esc(s.name)}</a> <span class="note">· ${bits.map(esc).join(" · ")}</span></li>`; };
+  $("#report").innerHTML = `
+    <div class="rep-head"><h2>สถานการณ์น้ำท่วมสถานีไฟฟ้า</h2>
+      <div class="note">ณ ${thTime(new Date().toISOString())} · ทั้งหมด ${stations.length} สถานี</div>
+      <div class="rep-grid">${order.map(lv=>`<div><b style="color:${info(lv).hex}">${groups[lv].length}</b><span>${info(lv).name}</span></div>`).join("")}</div>
+    </div>
+    ${order.filter(lv => groups[lv].length).map(lv => `
+      <details class="card" ${lv>=2?"open":""}>
+        <summary style="cursor:pointer;font-weight:600;font-size:16px"><span class="dot" style="display:inline-block;background:${info(lv).hex};margin-right:6px"></span>${info(lv).name} (${groups[lv].length})</summary>
+        <ul style="margin-top:8px">${groups[lv].map(row).join("")}</ul>
+      </details>`).join("")}`;
+}
+function loadImage(file){
+  if(!file) return;
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.width*k); cv.height = Math.round(img.height*k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    pendingImg = cv.toDataURL("image/jpeg", 0.85); URL.revokeObjectURL(url); drawReport();
+  };
+  img.src = url;
+}
+async function readInfographic(){
+  const btn = $("#readBtn"), out = $("#readOut");
+  btn.disabled = true; btn.textContent = "กำลังอ่านภาพ… (ประมาณ 10–30 วินาที)";
+  try{
+    const res = await fetch(webhook() + "/floodeye-infographic", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({image: pendingImg.split(",")[1], mediaType:"image/jpeg", by: user.displayName || user.email})
+    });
+    const j = await res.json();
+    if(!res.ok || j.ok === false) throw new Error(j.error || ("HTTP "+res.status));
+    out.textContent = `อ่านได้ ${j.flooded?.length||0} สถานีที่น้ำท่วมขัง: ${(j.flooded||[]).join(", ")}` + (j.unmatched?.length?`\nสถานีใหม่ที่ต้องปักหมุด: ${j.unmatched.join(", ")}`:"");
+    pendingImg = null; toast("อัปเดตจากรายงาน กฟน. แล้ว");
+    setTimeout(drawReport, 1500);
+  }catch(e){
+    out.textContent = "อ่านไม่สำเร็จ: " + e.message + "\nตรวจว่า workflow FloodEye — MEA Infographic Reader เปิด Active อยู่ และ URL webhook ในหน้าตั้งค่าถูกต้อง";
+    btn.disabled = false; btn.textContent = "ลองอีกครั้ง";
+  }
+}
+
+
+/* ============ EVENTS ============ */
+function drawEvents(){
+  const ev = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  const cnt = k => ev.filter(e => e.kind === k).length;
+  const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
+  const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || e.photo);
+  $("#events").innerHTML = `
+    <div class="rep-head"><h2>FloodEye — Grid Events</h2>
+      <div class="note">24 ชั่วโมงล่าสุด · น้ำท่วมในรัศมี 5 กม. (เขต กฟน.) · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div>
+      <a class="btn sm" href="gistda.html" style="display:inline-block;margin-top:8px;text-decoration:none">🛰️ ดูน้ำท่วมจากดาวเทียม GISTDA</a></div>
+    <div class="filters" style="margin-top:12px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}<button data-evp="1" class="${evPhotoOnly?"on":""}">📷 เฉพาะที่มีรูป</button></div>
+    ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
+      <div class="ic">${K.ic}</div><div style="flex:1;min-width:0">
+        <div class="t">${esc(e.title)}</div>
+        <div class="m">${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}</div>
+        <div class="m">ใกล้ <a href="#" onclick="openSheet('${esc(e.stationId)}');return false">${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)}</a> ${e.distKm} กม.</div>
+        ${e.kind==="quake" && e.nearby?.length ? `<details style="margin-top:6px"><summary class="m" style="cursor:pointer"><b>สถานีที่ควรตรวจ ${e.nearby.length} แห่ง</b> (เรียงจากใกล้ไปไกล)</summary>
+          <ol class="note" style="margin:6px 0 0;padding-left:20px">${e.nearby.map(x => `<li><a href="#" onclick="openSheet('${esc(x.id)}');return false">${esc(x.name)}</a> · ${x.distKm} กม.</li>`).join("")}</ol></details>` : ""}
+        ${evPhoto(e,true)}
+      </div></div>`; }).join("") : `<div class="empty">ไม่มีเหตุการณ์${evFilter==="all"?"":(EVK[evFilter]?.name||"")}${evPhotoOnly?"ที่มีรูป":""}ใกล้สถานีใน 24 ชม.</div>`}`;
+  $("#events").querySelectorAll("button[data-evf]").forEach(b => b.onclick = () => { evFilter = b.dataset.evf; drawEvents(); });
+  $("#events").querySelector("button[data-evp]").onclick = () => { evPhotoOnly = !evPhotoOnly; drawEvents(); };
+}
+
+/* ============ GUIDE ============ */
+function gtable(head, rows){ return `<div class="gt-wrap"><table class="gt"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }
+function drawGuide(){
+  const dot = i => `<span class="lv-dot" style="background:${LEVELS[i].hex}"></span>`;
+  $("#guide").innerHTML = `
+  <div class="rep-head"><h2>FloodEye ทำงานอย่างไร</h2>
+    <p style="margin:0">FloodEye ประเมินความเสี่ยงน้ำท่วมของสถานีไฟฟ้าโดยไม่ต้องติดตั้งเซนเซอร์ที่สถานี ระบบดึงข้อมูลสาธารณะจากหน่วยงานภายนอกทุก 15 นาที นำมาจับคู่กับพิกัดของแต่ละสถานี แล้วคำนวณเป็นคะแนนความเสี่ยง 0–100 คะแนน</p></div>
+
+  <div class="card"><h3>แหล่งข้อมูล</h3>${gtable(["ข้อมูล","แหล่ง","หน่วยงาน","ความถี่"],[
+    ["ฝนสะสม 24 ชม.","ThaiWater","สสน. รวมข้อมูลจากสถานีโทรมาตรหลายหน่วยงาน","ทุก 15 นาที"],
+    ["ระดับน้ำคลอง/แม่น้ำ","ThaiWater","สสน.","ทุก 15 นาที"],
+    ["ประชาชนแจ้งน้ำท่วม","Traffy Fondue","NECTEC (สวทช.) ร่วมกับ กทม.","ทุก 15 นาที"],
+    ["รายงานน้ำท่วมบนถนน","Longdo Traffic","มูลนิธิ iTIC รวมรายงานผู้ใช้และกรมทางหลวง","ทุก 15 นาที"],
+    ["การเข้าถึงสถานี","แอป FloodEye","เจ้าหน้าที่หน้างาน","เมื่อมีการอัปเดต"]])}</div>
+
+  <div class="card"><h3>ฝนสะสม 24 ชั่วโมง (สูงสุด 65 คะแนน)</h3>
+    <p>ใช้ค่าสูงสุดของสถานีวัดฝนในรัศมี 3 กม. จากสถานีไฟฟ้า หากไม่มีสถานีวัดฝนในรัศมีดังกล่าว ขยายเป็น 15 กม. หากยังไม่มีสถานีวัดฝน ระดับน้ำ และจุดแจ้งน้ำท่วมเลย จะแสดงเป็น "ไม่มีข้อมูล" (สีดำ) แทน "ปกติ"</p>
+    ${gtable(["ปริมาณฝน (มม.)","คะแนน"],[["150 ขึ้นไป","65"],["120–149","55"],["90–119","45"],["60–89","30"],["35–59","15"],["10–34","5"],["น้อยกว่า 10","0"]])}</div>
+
+  <div class="card"><h3>ระดับน้ำคลอง/แม่น้ำ (สูงสุด 35 คะแนน)</h3>
+    <p>ใช้สถานีวัดระดับน้ำที่ใกล้ที่สุดในรัศมี 5 กม. คิดเป็นร้อยละเทียบความสูงตลิ่ง โดย 0% คือท้องคลอง และ 100% คือระดับเสมอตลิ่ง</p>
+    ${gtable(["ระดับน้ำ (% ความสูงตลิ่ง)","คะแนน"],[["100 ขึ้นไป (ล้นตลิ่ง)","35"],["90–99","25"],["80–89","15"],["70–79","6"],["น้อยกว่า 70","0"]])}</div>
+
+  <div class="card"><h3>จุดแจ้งน้ำท่วม (สูงสุด 30 คะแนน)</h3>
+    <p>นับจุดแจ้งน้ำท่วมในรัศมี 1.5 กม. จาก 2 แหล่ง: Traffy Fondue (เรื่องที่มีคำว่า "ท่วม" แจ้งภายใน 6 ชั่วโมง) และ Longdo Traffic / กรมทางหลวง (รายงานน้ำท่วมที่ยังไม่หมดเวลา) ให้คะแนนจุดละ 8 คะแนน สูงสุด 30 คะแนน</p>
+    <p style="margin:0"><b>คะแนนรวม = คะแนนฝน + คะแนนระดับน้ำ + คะแนนแจ้งน้ำท่วม</b> (สูงสุด 100 คะแนน)</p></div>
+
+  <div class="card"><h3>Grid Events: เหตุการณ์ใกล้สถานี (ไม่นำมาคิดคะแนนน้ำท่วม)</h3>
+    <p>ทุก 15 นาที ระบบรวบรวมเหตุการณ์ 24 ชั่วโมงล่าสุดที่เกี่ยวกับระบบไฟฟ้า และระบุสถานีที่ใกล้ที่สุด แสดงเป็นไอคอนบนแผนที่ ในแท็บเหตุการณ์ และในหน้ารายละเอียดสถานี</p>
+    ${gtable(["เหตุการณ์","แหล่ง","รัศมี"],[
+      ["🌊 น้ำท่วม พร้อมรูปจากผู้แจ้ง (เฉพาะเขต กฟน.: กทม. นนทบุรี สมุทรปราการ)","Traffy Fondue, Longdo Traffic","5 กม."],
+      ["⚡ สายไฟ/ไฟฟ้า (สายหย่อน เสาเอียง ไฟฟ้าลัดวงจร หม้อแปลง ไฟดับ)","Traffy Fondue, Longdo Traffic","2 กม."],
+      ["🔥 ไฟไหม้","Longdo Traffic","2 กม."],
+      ["〰️ แผ่นดินไหว พร้อมรายการสถานีที่ควรตรวจ","Longdo Traffic","30 กม."]])}
+    <p style="margin:0">ไม่รวมไฟส่องสว่างถนน ซึ่งเป็นความรับผิดชอบของ กทม.</p></div>
+
+  <div class="card"><h3>ความเสี่ยงจากสภาพอากาศ (เลือกดูได้ที่ปุ่มมุมขวาบนของแผนที่)</h3>
+    <p>อัปเดตทุก 1 ชั่วโมงจาก Open-Meteo (พยากรณ์อากาศและคุณภาพอากาศ) แยกจากคะแนนน้ำท่วม</p>
+    ${gtable(["ความเสี่ยง","เฝ้าระวัง","เสี่ยงสูง","วิกฤต"],[
+      ["⛈️ พายุ/ฟ้าผ่า (3 ชม.ข้างหน้า)","ฝน ≥5 มม. หรือลม ≥35 กม./ชม. หรือ CAPE ≥1500","พายุฝนฟ้าคะนอง หรือฝน ≥20 มม. หรือลม ≥50","พายุฝนฟ้าคะนอง ร่วมกับฝน ≥20 มม. หรือลม ≥60"],
+      ["🌡️ ความร้อน (24 ชม.)","สูงสุด ≥36°C หรือ ≥35°C และกลางคืน ≥29°C","สูงสุด ≥38°C","สูงสุด ≥40°C"],
+      ["🧂 ลูกถ้วย (เกลือ/ฝุ่น)","รวมคะแนน 1","รวมคะแนน 2","รวมคะแนน 3"]])}
+    <p style="margin:0">ลูกถ้วย: PM2.5 ≥75 = 2, ≥50 = 1 · ห่างทะเล ≤5 กม. = 2, ≤10 กม. = 1 · ฤดูแล้ง (ธ.ค.–พ.ค.) ใกล้ทะเล +1 · ความชื้น ≥90% (หมอก/น้ำค้างทำให้คราบนำไฟฟ้า) +1 ยังไม่มีข้อมูลความเค็มโดยตรง ใช้ระยะจากทะเลแทน</p></div>
+
+  <div class="card"><h3>ระดับความเสี่ยง</h3>${gtable(["คะแนน","ระดับ","การดำเนินการ"],[
+    ["0–24",dot(0)+"ปกติ","–"],
+    ["25–49",dot(1)+"เฝ้าระวัง","ติดตามสถานการณ์"],
+    ["50–74",dot(2)+"เสี่ยงสูง","เตรียมพร้อม แจ้งเตือนกลุ่ม LINE"],
+    ["75–100",dot(3)+"วิกฤต","ควรส่งเจ้าหน้าที่ตรวจหน้างาน แจ้งเตือนกลุ่ม LINE"],
+    ["–",`<span class="lv-dot" style="background:${NODATA.hex}"></span>ไม่มีข้อมูล`,"ไม่มีสถานีวัดฝนในรัศมี 15 กม. ไม่มีสถานีวัดระดับน้ำ และไม่มีจุดแจ้งน้ำท่วม"]])}</div>
+
+  <div class="card"><h3>ตัวอย่างการคำนวณ (26 กันยายน 2569)</h3>${gtable(["สถานี","ฝน","ระดับน้ำ","แจ้งน้ำท่วม","รวม"],[
+    ["ย่อยดอนเมือง","173 มม. = 65","สูง = 35","5 จุด = 30","100 วิกฤต"],
+    ["ย่อยคลองร้อย","177 มม. = 65","ไม่มีสถานีวัด = 0","0 จุด = 0","65 เสี่ยงสูง"]])}
+    <p style="margin:0">ในวันดังกล่าว รายงาน กฟน. เวลา 13.30 น. และ 18.00 น. ยืนยันน้ำท่วมขังทั้ง 6 สถานีที่ติดตาม ขณะที่ฝนสะสม 24 ชม. รอบสถานีอยู่ระหว่าง 132–177 มม. ข้อมูลนี้ใช้ปรับเกณฑ์คะแนนฝนครั้งแรก</p></div>
+
+  <div class="card"><h3>ที่มาของเกณฑ์คะแนน</h3>${gtable(["ส่วน","ที่มา"],[
+    ["ช่วงฝน 10 / 35 / 90 มม.","อิงเกณฑ์ปริมาณฝน 24 ชม. ของกรมอุตุนิยมวิทยา: เล็กน้อย 0.1–10, ปานกลาง 10.1–35, หนัก 35.1–90, หนักมาก 90.1 ขึ้นไป"],
+    ["ช่วงฝน 120 / 150 มม.","เพิ่มจากเหตุการณ์ 26 ก.ย. 69 (ฝน 132–177 มม. เริ่มท่วม)"],
+    ["ระดับน้ำ 70 / 80 / 90 / 100%","ใกล้เคียงการแบ่งสถานการณ์ระดับน้ำของ ThaiWater ที่ 70–100% = น้ำมาก และเกิน 100% = ล้นตลิ่ง ช่วงย่อย 80 และ 90% แบ่งเพิ่มเอง"],
+    ["จุดแจ้งน้ำท่วม จุดละ 8 สูงสุด 30","กำหนดเอง ไม่มีเกณฑ์อ้างอิง"],
+    ["น้ำหนัก ฝน 65 / ระดับน้ำ 35 / จุดแจ้ง 30","กำหนดเอง โดยให้ฝนมีน้ำหนักมากสุดเพราะมีข้อมูลครอบคลุมทุกสถานี"],
+    ["รัศมี 3 / 5 / 1.5 กม.","กำหนดเอง ตามระยะที่คิดว่าเหตุการณ์ยังส่งผลถึงสถานี"],
+    ["ระดับ 25 / 50 / 75","แบ่ง 100 คะแนนเป็น 4 ช่วงเท่ากัน"]])}</div>
+
+  <div class="card"><h3>ขั้นตอนการทำงาน (ทุก 15 นาที)</h3><ol>
+    <li>อ่านรายชื่อและพิกัดสถานีไฟฟ้าจากฐานข้อมูล</li>
+    <li>ดึงข้อมูลฝนสะสม 24 ชั่วโมง และระดับน้ำคลอง/แม่น้ำ จาก ThaiWater</li>
+    <li>ดึงเรื่องแจ้งน้ำท่วมจาก Traffy Fondue และรายงานน้ำท่วมจาก Longdo Traffic / กรมทางหลวง</li>
+    <li>คำนวณคะแนนความเสี่ยงของแต่ละสถานีตามเกณฑ์ข้างต้น</li>
+    <li>บันทึกคะแนนลงฐานข้อมูล แอปแสดงผลใหม่ทันทีโดยไม่ต้องโหลดหน้าใหม่</li>
+    <li>หากสถานีใดเพิ่มระดับเป็นเสี่ยงสูงหรือวิกฤต ส่งแจ้งเตือนเข้ากลุ่ม LINE</li></ol>
+    <p style="margin:8px 0 0">หากแหล่งข้อมูลใดไม่ตอบสนอง ระบบจะข้ามแหล่งนั้นและคำนวณจากแหล่งที่เหลือ หากดึงข้อมูลไม่ได้ทุกแหล่ง ระบบจะคงค่าเดิมไว้ ไม่เขียนทับ</p></div>
+
+  <div class="card"><h3>สิทธิ์การใช้งาน</h3>${gtable(["การใช้งาน","เงื่อนไข"],[
+    ["ดูแผนที่ สถานี รายงาน และคู่มือ","ทุกคนที่มีลิงก์"],
+    ["อัปเดตสถานะ แก้พิกัด เพิ่มสถานี","เข้าสู่ระบบด้วยบัญชี Google"],
+    ["เข้าหน้าตั้งค่า","ต้องใส่รหัสผ่าน"]])}</div>
+
+  <div class="card"><h3>ข้อจำกัด</h3><ul>
+    <li><b>ประเมินความเสี่ยงรอบสถานี:</b> ไม่ได้วัดระดับน้ำภายในรั้วสถานีโดยตรง</li>
+    <li><b>ระดับน้ำคลอง:</b> บางสถานีไม่มีสถานีวัดในรัศมี 5 กม. เช่น สถานีย่อยคลองร้อย คะแนนจึงมาจากฝนเป็นหลัก</li>
+    <li><b>Traffy Fondue:</b> ครอบคลุมพื้นที่กรุงเทพฯ ได้ดี แต่ปริมณฑลมีการแจ้งน้อยกว่า และเป็นข้อมูลที่ประชาชนแจ้งเองโดยยังไม่ผ่านการตรวจสอบ</li>
+    <li><b>Longdo Traffic:</b> รายงานของผู้ใช้ส่วนใหญ่มีอายุ 1 ชั่วโมงหลังแจ้ง หลังจากนั้นจะไม่นับเป็นคะแนน แต่ยังแสดงในรายการ 6 ชั่วโมง</li>
+    <li><b>ยังไม่รวม:</b> ข้อมูลเซนเซอร์น้ำท่วมถนนของสำนักการระบายน้ำ กทม. (รอ API หรือติดตั้งเซนเซอร์เอง) และฝนพยากรณ์ล่วงหน้า</li></ul></div>`;
+}
+
+/* ============ SETTINGS ============ */
+function drawSettings(){
+  $("#settings").innerHTML = `
+    <div class="card" style="margin-top:0"><h3>บัญชี</h3>
+      <p class="note">${user?`เข้าสู่ระบบเป็น ${esc(user.email)}`:"ยังไม่ได้เข้าสู่ระบบ ดูข้อมูลได้ แต่แก้ไขไม่ได้"}</p></div>
+    <div class="card"><h3>เพิ่มสถานี</h3>
+      <label for="nName">ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)</label><input type="text" id="nName" placeholder="เช่น ลาดกระบัง">
+      <label for="nType">ประเภท</label><select id="nType"><option value="sub">สถานีย่อย</option><option value="terminal">สถานีต้นทาง</option></select>
+      <div class="two"><div><label for="nLat">ละติจูด</label><input type="number" step="any" id="nLat"></div><div><label for="nLng">ลองจิจูด</label><input type="number" step="any" id="nLng"></div></div>
+      <button class="btn pri" style="width:100%;margin-top:12px" ${user?"":"disabled"} onclick="addStation()">เพิ่มสถานี</button>
+      ${stations.length?"":`<button class="btn" style="width:100%;margin-top:8px" ${user?"":"disabled"} onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button>`}
+    </div>
+    <div class="card"><h3>ส่งออกรายชื่อสถานี</h3>
+      <p class="note">ดาวน์โหลดเป็นไฟล์ CSV เปิดด้วย Excel ได้ มีลิงก์ Google Maps ของแต่ละสถานีไว้ตรวจพิกัด แก้ชื่อหรือพิกัดในไฟล์แล้วนำเข้ากลับได้ (ติ๊ก "อัปเดตพิกัด/ชื่อ" ในการ์ดนำเข้า)</p>
+      <button class="btn pri" style="width:100%" onclick="exportStations()" ${stations.length?"":"disabled"}>ส่งออก ${stations.length} สถานี (CSV)</button></div>
+    ${stations.some(s=>s._noname)?`<div class="card"><h3>สถานีที่ไม่มีชื่อ</h3>
+      <p class="note">พบ ${stations.filter(s=>s._noname).length} รายการที่ไม่มีชื่อและไม่มีพิกัด เกิดจาก n8n เขียนคะแนนผิดเอกสาร ลบได้โดยไม่กระทบสถานีจริง</p>
+      <button class="btn" style="width:100%;color:var(--l3);border-color:var(--l3)" ${user?"":"disabled"} onclick="purgeNoName()">ลบ ${stations.filter(s=>s._noname).length} รายการที่ไม่มีชื่อ</button></div>`:""}
+    <div class="card"><h3>นำเข้าสถานีจากไฟล์</h3>
+      <p class="note">รองรับไฟล์จาก Overpass Turbo (GeoJSON หรือ JSON) และไฟล์ CSV ที่มีคอลัมน์ name, type, lat, lng สถานีที่มีชื่อซ้ำกับในระบบจะถูกข้าม ไม่เขียนทับพิกัดเดิม</p>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" id="impUpdate"> อัปเดตพิกัด/ชื่อของสถานีที่มีอยู่แล้ว (ใช้กับไฟล์ที่ส่งออกไปแก้)</label>
+      <input type="file" id="impFile" accept=".json,.geojson,.csv" ${user?"":"disabled"}>
+      <div id="impPreview"></div>
+      ${user?"":`<p class="note">เข้าสู่ระบบเพื่อใช้งาน</p>`}</div>
+    <div class="card"><h3>การเชื่อมต่อ n8n</h3>
+      <label for="wh">Webhook base URL</label><input type="url" id="wh" value="${esc(webhook())}">
+      <button class="btn" style="margin-top:8px" onclick="localStorage.setItem('fe_webhook',$('#wh').value.trim());toast('บันทึกแล้ว')">บันทึก</button></div>
+    <div class="card"><h3>Grid Events บนแผนที่</h3>
+      <p class="note">แสดงไอคอน 🌊 น้ำท่วม · ⚡ สายไฟ/ไฟฟ้า · 🔥 ไฟไหม้ · 〰️ แผ่นดินไหว บนแผนที่ และป้ายนับจำนวนที่แถบด้านบน (แท็บ Grid Events ยังดูได้ตามปกติ)</p>
+      <button class="btn ${showEv?"pri":""}" onclick="toggleEv()">${showEv?"เปิดอยู่ · กดเพื่อปิด":"ปิดอยู่ · กดเพื่อเปิด"}</button></div>
+    <div class="card"><h3>โหมดตัวอย่าง</h3>
+      <p class="note">แสดงคะแนนเสี่ยงจำลองกับสถานีที่ยังไม่มีข้อมูลจริง ใช้ทดสอบหน้าจอก่อนเปิด workflow เก็บข้อมูล ค่าจำลองไม่ถูกบันทึกลงฐานข้อมูล</p>
+      <button class="btn" onclick="toggleDemo()">${demo?"ปิดโหมดตัวอย่าง":"เปิดโหมดตัวอย่าง"}</button></div>
+    <div class="card"><h3>เกณฑ์คะแนนเสี่ยง</h3>
+      <ul class="note">
+        <li>ฝนสะสม 24 ชม. สูงสุดในรัศมี 3 กม.: ≥150 มม. 65 คะแนน, ≥120 55, ≥90 45, ≥60 30, ≥35 15, ≥10 5</li>
+        <li>ระดับน้ำคลอง/แม่น้ำใกล้สุดในรัศมี 5 กม. (% ความจุตลิ่ง): ≥100% 35, ≥90% 25, ≥80% 15, ≥70% 6</li>
+        <li>จุดแจ้งน้ำท่วม Traffy (6 ชม.) + Longdo/กรมทางหลวง (ที่ยังไม่หมดเวลา) รัศมี 1.5 กม.: จุดละ 8 สูงสุด 30</li>
+        <li>0–24 ปกติ · 25–49 เฝ้าระวัง · 50–74 เสี่ยงสูง · 75+ วิกฤต</li>
+      </ul></div>`;
+  const f=$("#impFile"); if(f) f.onchange = e => onImpFile(e.target.files[0]);
+}
+/* ============ IMPORT ============ */
+let impRows = [];
+const EXCL_OP = /กฟผ|EGAT|Generating|กฟภ|PEA|Provincial/i;
+const EXCL_SUB = /^(minor_distribution|industrial|traction|converter)$/i;
+const normName = n => String(n||"").replace(/\*+/g," ").replace(/การไฟฟ้านครหลวง|กฟน\.?|\bMEA\b|สถานีไฟฟ้าย่อย|สถานีไฟฟ้าต้นทาง|สถานีไฟฟ้า|สถานีย่อย|สถานีต้นทาง|substation|สถานี/gi,"").replace(/[()]/g," ").replace(/\s+/g," ").trim();
+const keyName = n => normName(n).replace(/\s/g,"").toLowerCase();
+function centroid(g){
+  const pts=[]; (function walk(c){ if(typeof c[0]==="number") pts.push(c); else c.forEach(walk); })(g.coordinates||[]);
+  if(!pts.length) return {};
+  return {lng: pts.reduce((a,p)=>a+p[0],0)/pts.length, lat: pts.reduce((a,p)=>a+p[1],0)/pts.length};
+}
+function splitCSV(l){ const out=[]; let cur="", q=false;
+  for(let i=0;i<l.length;i++){ const ch=l[i];
+    if(q){ if(ch==='"'){ if(l[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true; else if(ch===","){ out.push(cur); cur=""; } else cur+=ch; }
+  out.push(cur); return out; }
+function parseCSV(text){
+  const lines = text.replace(/^\uFEFF/,"").split(/\r?\n/).filter(l=>l.trim());
+  const head = splitCSV(lines.shift()).map(h=>h.trim().toLowerCase());
+  const col = names => head.findIndex(h => names.includes(h));
+  const iId=col(["id"]), iN=col(["name","ชื่อ","ชื่อสถานี"]), iT=col(["type","ประเภท"]), iLa=col(["lat","latitude","ละติจูด"]), iLo=col(["lng","lon","long","longitude","ลองจิจูด"]);
+  return lines.map(l => { const c=splitCSV(l).map(x=>x.trim()); const t=(c[iT]||"");
+    return {id: iId>=0 ? c[iId] : null, tags:{name:c[iN]}, lat:parseFloat(c[iLa]), lng:parseFloat(c[iLo]), forceType: /ต้นทาง|terminal/i.test(t)?"terminal":(t?"sub":null)}; });
+}
+function parseStationFile(text, fname){
+  let raw = [];
+  if(/\.csv$/i.test(fname)) raw = parseCSV(text);
+  else {
+    const j = JSON.parse(text);
+    if(j.elements) raw = j.elements.map(e => ({tags:e.tags||{}, lat:e.lat ?? e.center?.lat, lng:e.lon ?? e.center?.lon}));
+    else if(j.features) raw = j.features.map(f => { const p=f.properties||{}; return {tags: p.tags||p, ...(f.geometry?.type==="Point"?{lng:f.geometry.coordinates[0],lat:f.geometry.coordinates[1]}:centroid(f.geometry||{}))}; });
+  }
+  const upd = !!$("#impUpdate")?.checked;
+  const byKey = new Map(stations.map(s => [keyName(s.name), s])), byId = new Map(stations.map(s => [s.id, s]));
+  const seen = new Set(), out = [], skip = {noname:0, other:0, dup:0, nopos:0};
+  for(const r of raw){
+    const t = r.tags||{}, name = t["name:th"] || t.name || t["name:en"] || "";
+    if(!name){ skip.noname++; continue; }
+    if(EXCL_OP.test((t.operator||"")+" "+name) || EXCL_SUB.test(t.substation||"")){ skip.other++; continue; }
+    if(!(r.lat>5 && r.lat<21 && r.lng>97 && r.lng<106)){ skip.nopos++; continue; }
+    const k = keyName(name); if(!k || seen.has(k)){ skip.dup++; continue; }
+    const type = r.forceType || (/ต้นทาง|terminal/i.test(name) || /transmission/i.test(t.substation||"") ? "terminal" : "sub");
+    const exist = (r.id && byId.get(r.id)) || byKey.get(k);
+    if(exist && !upd){ skip.dup++; continue; }
+    seen.add(k);
+    out.push({id: exist ? exist.id : normName(name).replace(/[^\w\u0E00-\u0E7F]/g,"_"), update: !!exist, name: normName(name), type, lat:+r.lat.toFixed(6), lng:+r.lng.toFixed(6), source: t.operator||""});
+  }
+  return {out, skip, total: raw.length};
+}
+function onImpFile(file){
+  if(!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const {out, skip, total} = parseStationFile(rd.result, file.name); impRows = out;
+      $("#impPreview").innerHTML = `<p class="note" style="margin-top:10px">อ่านได้ ${total} รายการ · นำเข้าได้ <b>${out.length}</b> · ข้าม: ไม่มีชื่อ ${skip.noname}, ของหน่วยงานอื่น/ไม่ใช่สถานีจำหน่าย ${skip.other}, ซ้ำ ${skip.dup}, พิกัดผิด ${skip.nopos}</p>
+        ${out.length?`<div class="gt-wrap" style="max-height:260px;overflow:auto"><table class="gt"><thead><tr><th>ชื่อ</th><th>ประเภท</th><th>พิกัด</th><th></th></tr></thead><tbody>${out.map(r=>`<tr><td>${esc(r.name)}</td><td>${TYPE[r.type]}</td><td>${r.lat}, ${r.lng}</td><td>${r.update?"อัปเดต":"ใหม่"}</td></tr>`).join("")}</tbody></table></div>
+        <button class="btn pri" style="width:100%;margin-top:10px" onclick="commitImport()">บันทึก ${out.length} สถานี (ใหม่ ${out.filter(r=>!r.update).length} · อัปเดต ${out.filter(r=>r.update).length})</button>`:""}`;
+    }catch(e){ $("#impPreview").innerHTML = `<p class="note" style="color:var(--l3)">อ่านไฟล์ไม่ได้: ${esc(e.message)}</p>`; }
+  };
+  rd.readAsText(file);
+}
+async function commitImport(){
+  if(!user || !impRows.length) return;
+  const now = new Date().toISOString();
+  try{
+    for(let i=0;i<impRows.length;i+=400){
+      const b = db.batch();
+      impRows.slice(i,i+400).forEach(r => b.set(db.collection("flood_stations").doc(r.id),
+        r.update ? {name:r.name, type:r.type, lat:r.lat, lng:r.lng, approx:false} : {name:r.name, type:r.type, lat:r.lat, lng:r.lng, approx:false, source:"import", createdAt:now}, {merge:true}));
+      await b.commit();
+    }
+    toast(`บันทึก ${impRows.length} สถานีแล้ว`); impRows = []; drawMap._fit = false; $("#impPreview").innerHTML = "";
+  }catch(e){ toast("นำเข้าไม่สำเร็จ: "+e.message); }
+}
+async function purgeNoName(){
+  const list = stations.filter(s => s._noname && s.lat == null); if(!list.length) return;
+  if(!confirm(`ลบ ${list.length} รายการที่ไม่มีชื่อ?`)) return;
+  try{ for(let i=0;i<list.length;i+=400){ const b=db.batch(); list.slice(i,i+400).forEach(s=>b.delete(db.collection("flood_stations").doc(s.id))); await b.commit(); }
+    toast(`ลบ ${list.length} รายการแล้ว`); }
+  catch(e){ toast("ลบไม่สำเร็จ: "+e.message); }
+}
+function exportStations(){
+  const q = v => { v = v==null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+  const rows = [["id","name","type","lat","lng","level","score","rain24h_mm","google_maps"]];
+  stations.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"th")).forEach(s => {
+    const r = riskOf(s), lv = levelOf(s);
+    rows.push([s.id, s.name, s.type==="terminal"?"ต้นทาง":"ย่อย", s.lat ?? "", s.lng ?? "", lv<0?"":LV(lv).name, r?.score ?? "", r?.rain24h ?? "",
+      s.lat!=null ? `https://www.google.com/maps?q=${s.lat},${s.lng}` : ""]);
+  });
+  const blob = new Blob(["\uFEFF" + rows.map(r => r.map(q).join(",")).join("\r\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `floodeye-stations-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  toast(`ส่งออก ${stations.length} สถานีแล้ว ดูไฟล์ในโฟลเดอร์ Downloads`);
+}
+function toggleEv(){ showEv = !showEv; localStorage.setItem("fe_show_ev", showEv ? "1" : "0"); drawMap(); drawSettings(); }
+function toggleDemo(){ demo=!demo; localStorage.setItem("fe_demo",demo?"1":"0"); renderAll(); }
+async function addStation(){
+  const name = $("#nName").value.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"").trim();
+  if(!name) return toast("ใส่ชื่อสถานี");
+  const lat = parseFloat($("#nLat").value), lng = parseFloat($("#nLng").value);
+  const id = name.replace(/[^\w\u0E00-\u0E7F]/g,"_");
+  if(stations.some(s=>s.id===id)) return toast("มีสถานีนี้อยู่แล้ว");
+  try{
+    await db.collection("flood_stations").doc(id).set({name, type:$("#nType").value, lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng, approx:false, createdAt:new Date().toISOString()});
+    toast("เพิ่มสถานี"+name+"แล้ว");
+  }catch(e){ toast("เพิ่มไม่สำเร็จ: "+e.message); }
+}
+async function seedStations(){
+  if(!user) return toast("เข้าสู่ระบบก่อน");
+  const b = db.batch();
+  SEED.forEach(s => b.set(db.collection("flood_stations").doc(s.id), {name:s.name,type:s.type,lat:s.lat,lng:s.lng,approx:s.approx,createdAt:new Date().toISOString()},{merge:true}));
+  try{ await b.commit(); toast("นำเข้า 6 สถานีแล้ว แก้พิกัดให้ตรงหน้างานด้วย"); }catch(e){ toast("นำเข้าไม่สำเร็จ: "+e.message); }
+}
+
+/* ============ NAV / AUTH / DATA ============ */
+async function sha256(t){ const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function askSettingsPw(){
+  return new Promise(res => {
+    $("#sheet").innerHTML = `<div class="grab"></div><h2>ใส่รหัสผ่าน</h2>
+      <p class="note">แท็บตั้งค่าต้องใช้รหัสผ่าน</p>
+      <input type="password" id="pwIn" inputmode="numeric" autocomplete="off" placeholder="รหัสผ่าน">
+      <div class="seg" style="margin-top:10px"><button id="pwCancel">ยกเลิก</button><button id="pwOk" class="on">เข้าสู่ตั้งค่า</button></div>
+      <p class="note" id="pwErr" style="color:var(--l3)"></p>`;
+    $("#sheet").classList.add("on"); $("#sheetBg").classList.add("on"); setTimeout(()=>$("#pwIn").focus(),50);
+    const done = ok => { $("#sheet").classList.remove("on"); $("#sheetBg").classList.remove("on"); res(ok); };
+    const check = async () => {
+      if(await sha256($("#pwIn").value) === SETTINGS_PW_HASH){ sessionStorage.setItem("fe_settings_ok","1"); done(true); }
+      else { $("#pwErr").textContent = "รหัสผ่านไม่ถูกต้อง"; $("#pwIn").select(); }
+    };
+    $("#pwOk").onclick = check; $("#pwCancel").onclick = () => done(false);
+    $("#pwIn").onkeydown = e => { if(e.key==="Enter") check(); };
+  });
+}
+document.querySelector("nav").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if(!b) return;
+  if(b.dataset.v==="settings" && sessionStorage.getItem("fe_settings_ok")!=="1" && !(await askSettingsPw())) return;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x===b));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-"+b.dataset.v));
+  if(b.dataset.v==="map") setTimeout(()=>map.invalidateSize(),50);
+});
+$("#authBtn").onclick = async () => {
+  if(user) return auth.signOut();
+  try{ await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch(e){ toast("เข้าสู่ระบบไม่สำเร็จ: "+e.message); }
+};
+auth.onAuthStateChanged(u => { user = u; $("#authBtn").textContent = u ? "ออกจากระบบ" : "เข้าสู่ระบบ"; renderAll(); });
+
+function renderAll(){
+  drawMap(); drawList(); drawReport(); drawEvents(); drawGuide(); drawSettings(); if(openId) drawSheet();
+  const latest = stations.map(s=>s.risk?.updatedAt).filter(Boolean).sort().pop();
+  $("#updated").innerHTML = latest ? `ประเมินล่าสุด<br>${thTime(latest)}` : (demo ? "โหมดตัวอย่าง" : "รอข้อมูลจาก n8n");
+}
+db.collection("flood_stations").onSnapshot(snap => {
+  stations = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, _noname: !s.name, name: s.name || `(ไม่มีชื่อ: ${decodeURIComponent(s.id)})`})); renderAll();
+}, e => { $("#updated").textContent = "เชื่อมฐานข้อมูลไม่ได้"; toast(e.message); });
+db.collection("grid_events").orderBy("at","desc").limit(800).onSnapshot(snap => {
+  gridEvents = snap.docs.map(d => ({id:d.id, ...d.data()})); drawMap(); drawEvents(); if(openId) drawSheet();
+}, () => {});
+db.collection("flood_reports").orderBy("receivedAt","desc").limit(5).onSnapshot(snap => {
+  reports = snap.docs.map(d => d.data()).filter(r => r.valid !== false); drawReport();
+}, () => {});
+
+if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
+
+/* ============ PWA INSTALL ============ */
+let deferredInstall = null;
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstall = e; if(!isStandalone()) $("#installBtn").hidden = false; });
+window.addEventListener("appinstalled", () => { $("#installBtn").hidden = true; deferredInstall = null; toast("ติดตั้ง FloodEye แล้ว เปิดได้จากหน้าจอหลัก"); });
+if(isIOS && !isStandalone()) $("#installBtn").hidden = false;
+$("#installBtn").onclick = async () => {
+  if(deferredInstall){ deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; $("#installBtn").hidden = true; }
+  else if(isIOS) toast("iPhone/iPad: กดปุ่มแชร์ (สี่เหลี่ยมลูกศรขึ้น) ใน Safari แล้วเลือก \"เพิ่มไปยังหน้าจอโฮม\"", 6000);
+};
+// เปิดแท็บตาม ?tab= (ใช้กับ shortcut ของแอป)
+{ const t = new URLSearchParams(location.search).get("tab"); const b = t && document.querySelector(`nav button[data-v="${t}"]`); if(b && t!=="settings") b.click(); }
+</script>
+</body>
+</html>
