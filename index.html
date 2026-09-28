@@ -276,14 +276,16 @@ function heatOf(s){
 }
 function insulatorOf(s){
   const ins = s.weather?.insulator; if(!ins) return null;
-  if(!(gFresh(s) && s.gweather.rhMax != null)) return {...ins, src: "Open-Meteo"};
+  if(!(gFresh(s) && s.gweather.rhMax != null)) return {...ins, src: "Open-Meteo", at: s.weather?.updatedAt};
   const rhMax = s.gweather.rhMax;
   const pol = ins.pm25 == null ? 0 : ins.pm25 >= 75 ? 2 : ins.pm25 >= 50 ? 1 : 0;
   const sea = ins.coastKm == null ? 0 : ins.coastKm <= 5 ? 2 : ins.coastKm <= 10 ? 1 : 0;
   const base = pol + sea + (sea && ins.drySeason ? 1 : 0);
   const level = Math.min(3, base + (base > 0 && rhMax >= 90 ? 1 : 0));
-  return {...ins, rhMax, level, src: "PM2.5 Open-Meteo · ความชื้น Google WeatherNext"};
+  return {...ins, rhMax, level, src: "PM2.5 Open-Meteo · ความชื้น Google WeatherNext", at: s.gweather.updatedAt, atOm: s.weather?.updatedAt};
 }
+const wxAt = s => [s.weather?.updatedAt, gFresh(s) ? s.gweather.updatedAt : null].filter(Boolean).sort().pop();
+const srcLine = (src, at) => `<br><span style="font-size:11px;opacity:.75">แหล่ง: ${src||"Open-Meteo"}${at?` · ${thTime(at)}`:""}${at && hoursAgo(at) > 2 ? " ⚠️ ข้อมูลเก่า":""}</span>`;
 function wxTip(s, mode){
   if(mode==="forecast"){ const f = forecastOf(s); return f ? `<div>ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. (${f.src})</div><div>คะแนนคาดการณ์ ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</div>` : "<div>ยังไม่มีข้อมูลพยากรณ์ฝน</div>"; }
   const w = mode === "storm" ? (stormOf(s) || s.weather?.storm) : mode === "heat" ? heatOf(s) : mode === "insulator" ? insulatorOf(s) : s.weather?.[mode]; if(!w) return "";
@@ -410,7 +412,8 @@ function levelOf(s){
 }
 const LV = lv => lv < 0 ? NODATA : LEVELS[lv];
 function gaugePct(s){ const lv=levelOf(s); if(lv===4) return 100; const r=riskOf(s); return r ? Math.max(4, r.score) : 0; }
-function accessOf(s){
+function accessOf(s){ const r = accessRaw(s); return r && r.status === "cleared" ? null : r; }
+function accessRaw(s){
   const a = s.access, c = s.confirmed;
   if(a && c && c.accessAt && new Date(c.accessAt) > new Date(a.at || 0)) return {status:c.access, note:c.accessNote, at:c.accessAt, by:"รายงาน กฟน."};
   if(a) return a;
@@ -447,7 +450,7 @@ function drawMap(){
       <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
       ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด</div>`:""}
       <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`
-      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${s.weather?.updatedAt ? "อัปเดต "+thTime(s.weather.updatedAt) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
+      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${wxAt(s) ? "อัปเดต "+thTime(wxAt(s)) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
@@ -572,10 +575,10 @@ function drawSheet(){
     </div>
     ${s.weather?(()=>{ const w=s.weather, L3=lv=>LV(lv??-1);
       const st=stormOf(s)||{}, ht=heatOf(s)||{}, ins=insulatorOf(s)||{};
-      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดต ${thTime(w.updatedAt)}</h4><div class="wxg">
-        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${st.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อนสะสมในสถานี · ${L3(ht.level).name}</b>24 ชม. ข้างหน้า สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ht.src||"Open-Meteo"}</span></div>
-        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ฝุ่น/เกลือเกาะฉนวน · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}${ins.level>=2?"<br>เสี่ยงไฟวาบที่ลูกถ้วย ควรล้างหรือตรวจฉนวน":""}<br><span style="font-size:11px;opacity:.75">แหล่ง: ${ins.src||"Open-Meteo"}</span></div>
+      return `<div class="sec"><h4>ความเสี่ยงจากสภาพอากาศ · อัปเดตล่าสุด ${thTime(wxAt(s))}</h4><div class="wxg">
+        <div class="wxc" style="--c:${L3(st.level).hex}"><b>⛈️ พายุ/ฟ้าผ่า 3 ชม. · ${L3(st.level).name}</b>ฝน ${st.rain3h ?? "-"} มม. · ลมกระโชก ${st.gustMax ?? "-"} กม./ชม.<br>${st.thunder?"⚡ คาดว่ามีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${st.thunderMax!=null?` (โอกาส ${st.thunderMax}%)`:""}${srcLine(st.src, st.at)}</div>
+        <div class="wxc" style="--c:${L3(ht.level).hex}"><b>🌡️ ความร้อนสะสมในสถานี · ${L3(ht.level).name}</b>24 ชม. ข้างหน้า สูงสุด ${ht.tmax ?? "-"} °C · ต่ำสุด ${ht.tmin ?? "-"} °C${ht.heatIndexMax!=null?` · รู้สึกเหมือน ${ht.heatIndexMax} °C`:""}<br>${ht.level>=2?"หม้อแปลงเสี่ยงร้อนเกิน ตรวจโหลดและพัดลม":"ปกติ"}${srcLine(ht.src, ht.at)}</div>
+        <div class="wxc" style="--c:${L3(ins.level).hex}"><b>🧂 ฝุ่น/เกลือเกาะฉนวน · ${L3(ins.level).name}</b>PM2.5 ${ins.pm25 ?? "-"} · ชื้นสูงสุด ${ins.rhMax ?? "-"}%<br>ห่างทะเล ${ins.coastKm ?? "-"} กม.${ins.drySeason?" · ฤดูแล้ง":""}${ins.level>=2?"<br>เสี่ยงไฟวาบที่ลูกถ้วย ควรล้างหรือตรวจฉนวน":""}${srcLine(ins.src, ins.atOm || ins.at)}</div>
       </div></div>`; })():""}
     ${isConfirmed(s)?`<div class="confirm sec">รายงาน กฟน. ยืนยันน้ำท่วมขัง · ${thTime(c.reportAt)}${c.accessNote?`<br>${esc(c.accessNote)}`:""}</div>`:""}
     <div class="kv">
@@ -607,6 +610,7 @@ function drawSheet(){
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
     <div class="sec"><h4>การเข้าถึงสถานี ${a?`· ${esc(a.by||"")} ${thTime(a.at)}`:""}</h4>
       <div class="seg">${["normal","high_vehicle","no_access"].map(k=>`<button ${can?"":"disabled"} class="${a?.status===k?"on":""}" onclick="setAccess('${esc(s.id)}','${k}')">${ACCESS[k].t}</button>`).join("")}</div>
+      ${can && a ? `<button class="btn sm" style="margin-top:8px" onclick="setAccess('${esc(s.id)}','cleared')">✕ ยกเลิกสถานะการเข้าถึง</button>` : ""}
       ${can?"":`<p class="note">เข้าสู่ระบบเพื่ออัปเดตสถานะหน้างาน</p>`}
     </div>
     ${can && !admin?`<div class="sec"><button class="btn" style="width:100%" onclick="unlockEdit('${esc(s.id)}')">🔒 แก้ชื่อ ตำแหน่ง หรือลบสถานี (ใช้รหัสตั้งค่า)</button></div>`:""}
@@ -629,7 +633,7 @@ async function setAccess(id, status){
   if(!user) return toast("เข้าสู่ระบบก่อน");
   try{
     await db.collection("flood_stations").doc(id).set({access:{status, at:new Date().toISOString(), by:user.displayName||user.email}},{merge:true});
-    toast("บันทึกสถานะการเข้าถึงแล้ว");
+    toast(status === "cleared" ? "ยกเลิกสถานะการเข้าถึงแล้ว" : "บันทึกสถานะการเข้าถึงแล้ว");
   }catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
 }
 const isAdmin = () => sessionStorage.getItem("fe_settings_ok") === "1";
