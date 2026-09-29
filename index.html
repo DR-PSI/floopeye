@@ -180,6 +180,9 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   nav button svg{width:20px;height:20px}
 }
 .modes .mlist{display:flex;flex-direction:column;gap:4px}
+.upbox{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(15,42,58,.18);padding:8px 10px;font-size:12px;line-height:1.5;max-width:min(360px,calc(100vw - 90px));max-height:40vh;overflow:auto}
+.upbox .updays{margin:4px 0;display:flex;flex-wrap:wrap;gap:4px}
+.upbox .note{font-size:11px;margin-top:4px}
 @media (max-width:640px){ .modes .mlist{display:none} .modes.open .mlist{display:flex} }
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
@@ -260,7 +263,7 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
-const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}, upstream:{ic:"🏞️", name:"น้ำเหนือ 3 วัน"}};
 let mapMode = localStorage.getItem("fe_mode") || "flood";
 /* พายุ/ฟ้าผ่า: ใช้ Google WeatherNext ถ้าใหม่ไม่เกิน 2 ชม. ไม่งั้นใช้ Open-Meteo */
 function stormOf(s){
@@ -284,9 +287,49 @@ function insulatorOf(s){
   const level = Math.min(3, base + (base > 0 && rhMax >= 90 ? 1 : 0));
   return {...ins, rhMax, level, src: "PM2.5 Open-Meteo · ความชื้น Google WeatherNext", at: s.gweather.updatedAt, atOm: s.weather?.updatedAt};
 }
+/* น้ำเหนือ 3 วัน: เอกสาร upstream/latest จาก n8n (C.2/C.13 + น้ำขึ้นป้อมพระจุลฯ) × ระยะสถานีถึงแม่น้ำเจ้าพระยา (คำนวณในแอป) */
+let upstream = null, riverPts = [], riverKmCache = {}, riverLayer = null;
+const UP_NEAR_KM = 0.5, UP_MID_KM = 1.5;   // ≤0.5 กม. ใช้ระดับเต็ม · ≤1.5 กม. ลด 1 ระดับ · ไกลกว่านั้น = ปกติ
+function setUpstream(d){
+  upstream = d || null; riverKmCache = {};
+  riverPts = String(d?.river || "").split(";").map(x => x.split(",").map(Number)).filter(p => p.length === 2 && !isNaN(p[0]) && !isNaN(p[1]));
+}
+function riverKmOf(s){
+  if(s.lat == null || !riverPts.length) return null;
+  const key = s.id + "|" + s.lat + "," + s.lng; if(key in riverKmCache) return riverKmCache[key];
+  let best = Infinity;
+  for(const [la, lo] of riverPts){ if(Math.abs(la - s.lat) > 0.05 || Math.abs(lo - s.lng) > 0.05) continue; const d = kmBetween(s.lat, s.lng, la, lo); if(d < best) best = d; }
+  return riverKmCache[key] = best === Infinity ? null : Math.round(best * 100) / 100;
+}
+function kmBetween(a,b,c,d){ const r=Math.PI/180, x=Math.sin((c-a)*r/2)**2 + Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2; return 2*6371*Math.asin(Math.sqrt(x)); }
+function upstreamOf(s){
+  if(!upstream || !Array.isArray(upstream.days)) return null;
+  const rk = riverKmOf(s), cut = rk == null || rk > UP_MID_KM ? 9 : rk > UP_NEAR_KM ? 1 : 0;
+  const days = upstream.days.map(d => ({...d, level: d.level == null ? -1 : cut === 9 ? 0 : Math.max(0, d.level - cut)}));
+  const level = Math.max(-1, ...days.map(d => d.level)), peak = days.find(d => d.level === level);
+  return {riverKm: rk, riverside: cut !== 9, days, level, peak, at: upstream.updatedAt};
+}
+const dTh = iso => { if(!iso) return "-"; const [y,m,d] = iso.split("-").map(Number); return `${d} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][m-1]}`; };
+const fmtQ = q => q == null ? "-" : Math.round(q).toLocaleString("en-US");
+function upTip(s){
+  const u = upstreamOf(s); if(!u) return "<div>ยังไม่มีข้อมูลน้ำเหนือ</div>";
+  const where = u.riverKm == null ? "ยังไม่มีเส้นแม่น้ำ" : `ห่างแม่น้ำเจ้าพระยา ${u.riverKm} กม.${u.riverside ? "" : " (ไม่อยู่ริมน้ำ)"}`;
+  return `<div>${where}</div>` + u.days.map(d => `<div>${dTh(d.date)}: <b style="color:${LV(d.level).hex}">${LV(d.level).name}</b>${d.q!=null?` · ${fmtQ(d.q)} ลบ.ม./วิ`:""}${d.tideMax!=null?` · น้ำขึ้น ${d.tideMax} ม.`:""}</div>`).join("");
+}
+function upSummaryHtml(){
+  const u = upstream; if(!u) return `<b>🏞️ น้ำเหนือ 3 วัน</b><div class="note">รอข้อมูลจาก n8n</div>`;
+  const ks = (u.keyStations || []).filter(k => k.found);
+  const row = k => `<div>${esc(k.name)}: ${k.q!=null?`<b>${fmtQ(k.q)}</b> ลบ.ม./วิ`:""}${k.trend!=null?` (${k.trend>=0?"▲":"▼"}${fmtQ(Math.abs(k.trend))} ใน 24 ชม.)`:""}${k.bankDiff!=null?` · ${k.bankDiff>0?`<b style="color:var(--l3)">ล้นตลิ่ง ${k.bankDiff} ม.</b>`:`ต่ำกว่าตลิ่ง ${Math.abs(k.bankDiff)} ม.`}`:""}</div>`;
+  return `<b>🏞️ น้ำเหนือ → กทม.–นนทบุรี (สถานีริมเจ้าพระยา)</b>
+    <div class="updays">${(u.days||[]).map(d => `<span class="lvl" style="background:${LV(d.level ?? -1).hex}">${dTh(d.date)} ${LV(d.level ?? -1).name}</span>`).join(" ")}</div>
+    ${ks.map(row).join("")}
+    ${(u.dams||[]).length ? `<div>${u.dams.map(d => `${esc(d.name.replace("เขื่อน",""))} ${d.pct ?? "-"}%${d.release!=null?` ปล่อย ${fmtQ(d.release)}`:""}`).join(" · ")}</div>` : ""}
+    <div class="note">อัปเดต ${thTime(u.updatedAt)}${hoursAgo(u.updatedAt) > 3 ? " ⚠️ ข้อมูลเก่า" : ""} · ค่าประมาณจากเวลาเดินทางของน้ำ ไม่ใช่พยากรณ์ทางการของกรมชลประทาน</div>`;
+}
 const wxAt = s => [s.weather?.updatedAt, gFresh(s) ? s.gweather.updatedAt : null].filter(Boolean).sort().pop();
 const srcLine = (src, at) => `<br><span style="font-size:11px;opacity:.75">แหล่ง: ${src||"Open-Meteo"}${at?` · ${thTime(at)}`:""}${at && hoursAgo(at) > 2 ? " ⚠️ ข้อมูลเก่า":""}</span>`;
 function wxTip(s, mode){
+  if(mode==="upstream") return upTip(s);
   if(mode==="forecast"){ const f = forecastOf(s); return f ? `<div>ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. (${f.src})</div><div>คะแนนคาดการณ์ ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</div>` : "<div>ยังไม่มีข้อมูลพยากรณ์ฝน</div>"; }
   const w = mode === "storm" ? (stormOf(s) || s.weather?.storm) : mode === "heat" ? heatOf(s) : mode === "insulator" ? insulatorOf(s) : s.weather?.[mode]; if(!w) return "";
   if(mode==="storm"){ const t = stormOf(s) || w; return `<div>ฝน 3 ชม.ข้างหน้า ${t.rain3h ?? "-"} มม. · ลมกระโชก ${t.gustMax ?? "-"} กม./ชม.</div><div>${t.thunder?"⚡ มีพายุฝนฟ้าคะนอง":"ไม่มีพายุฝนฟ้าคะนอง"}${t.thunderMax!=null?` · โอกาส ${t.thunderMax}%`:""}${t.cape!=null?` · CAPE ${t.cape}`:""}</div><div>แหล่ง: ${t.src || "Open-Meteo"}</div>`; }
@@ -396,7 +439,7 @@ function riskOf(s){
   return {score, level:scoreToLevel(score), rain24h:rain, wlPercent:wl, wlStation:"(จำลอง)", traffyCount:traffy, demo:true};
 }
 const isNoData = r => !!r && (r.noData || (r.rain24h == null && r.wlPercent == null && !r.traffyCount && !r.longdoCount));
-const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : mapMode === "storm" ? (stormOf(s)?.level ?? -1) : mapMode === "heat" ? (heatOf(s)?.level ?? -1) : mapMode === "insulator" ? (insulatorOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
+const mapLevel = s => mapMode === "flood" ? levelOf(s) : mapMode === "forecast" ? (forecastOf(s)?.level ?? -1) : mapMode === "storm" ? (stormOf(s)?.level ?? -1) : mapMode === "heat" ? (heatOf(s)?.level ?? -1) : mapMode === "insulator" ? (insulatorOf(s)?.level ?? -1) : mapMode === "upstream" ? (upstreamOf(s)?.level ?? -1) : (s.weather?.[mapMode]?.level ?? -1);
 function scoreToLevel(sc){ return sc>=75?3 : sc>=50?2 : sc>=25?1 : 0; }
 /* คาดการณ์ 3 ชม.: ฝนสะสม (ThaiWater) + ฝนที่จะตกอีก 3 ชม. (Open-Meteo จาก Weather Risk) — เกณฑ์ต้องตรงกับ Compute Risk ใน n8n */
 const fRainPts = mm => mm>=150?65 : mm>=120?55 : mm>=90?45 : mm>=60?30 : mm>=35?15 : mm>=10?5 : 0;
@@ -442,11 +485,21 @@ function L_init(){
   return m;
 }
 let markers = {}, radiusLayer = null;
+const UpCtl = window.L.Control.extend({ options:{position:"bottomleft"},
+  onAdd(){ const d = window.L.DomUtil.create("div","upbox"); window.L.DomEvent.disableClickPropagation(d); window.L.DomEvent.disableScrollPropagation(d); return d; } });
+const upCtl = new UpCtl().addTo(map);
 let hiddenLv = new Set(JSON.parse(localStorage.getItem("fe_hidden") || "[]"));
 const BASE_SIZE = {"-1":8, 0:8, 1:10, 2:12, 3:14, 4:14};
 function pinScale(){ const z = map.getZoom(); return z >= 14 ? 1.7 : z >= 13 ? 1.45 : z >= 12 ? 1.2 : 1; }
 function drawMap(){
   Object.values(markers).forEach(mk => mk.remove()); markers = {};
+  if(riverLayer){ riverLayer.remove(); riverLayer = null; }
+  if(mapMode === "upstream" && riverPts.length){
+    const c = LV(upstream?.maxLevel ?? -1).hex;
+    riverLayer = window.L.layerGroup(riverPts.map(p => window.L.circleMarker(p, {radius:2, stroke:false, fillColor:c, fillOpacity:.7, interactive:false}))).addTo(map);
+  }
+  upCtl.getContainer().style.display = mapMode === "upstream" ? "" : "none";
+  if(mapMode === "upstream") upCtl.getContainer().innerHTML = upSummaryHtml();
   const pts = [], k = pinScale();
   for(const s of stations){
     if(s.lat == null || s.lng == null) continue;
@@ -461,7 +514,7 @@ function drawMap(){
       <div><span class="lvl" style="background:${lvl.hex}">${lvl.name}</span>${r&&!isNoData(r)&&lv<4?` คะแนน ${r.score}`:""}</div>
       ${r&&!isNoData(r)?`<div>ฝน 24 ชม. ${r.rain24h ?? "-"} มม.</div><div>ระดับน้ำคลอง ${r.wlPercent != null ? Math.round(r.wlPercent)+"%" : "-"}</div><div>แจ้งน้ำท่วมใกล้ ${(r.traffyCount||0)+(r.longdoCount||0)} จุด</div>`:""}
       <div class="tip-t">${r?.updatedAt ? "ประเมิน "+thTime(r.updatedAt) : ""}</div></div>`
-      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${wxAt(s) ? "อัปเดต "+thTime(wxAt(s)) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
+      : `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b><div>${MODES[mapMode].ic} <span class="lvl" style="background:${lvl.hex}">${lvl.name}</span></div>${wxTip(s, mapMode)}<div class="tip-t">${mapMode==="upstream" ? (upstream?.updatedAt ? "อัปเดต "+thTime(upstream.updatedAt) : "") : wxAt(s) ? "อัปเดต "+thTime(wxAt(s)) : "ยังไม่มีข้อมูลสภาพอากาศ"}</div></div>`,
       {direction:"top", offset:[0,-size/2-4], opacity:1});
     mk.on("click", ()=>openSheet(s.id));
     markers[s.id] = mk;
@@ -602,6 +655,11 @@ function drawSheet(){
     ${(()=>{ const f = forecastOf(s); if(!f) return ""; const L = LV(f.level);
       return `<div class="sec"><h4>⏳ คาดการณ์ 3 ชม. ข้างหน้า</h4><p style="margin:0 0 4px"><span class="lvl" style="background:${L.hex}">${L.name}</span> คะแนนคาด ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</p>
         <p class="note" style="margin:0">ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. → ฝนรวมประมาณ ${f.rainTotal} มม. · ใช้พยากรณ์จาก ${f.src}<br>เทียบ 2 แหล่ง: Google WeatherNext ${f.gR3!=null?`<b>${f.gR3}</b> มม.${f.gProb!=null?` (โอกาสฝน ${f.gProb}%)`:""}`:"-"} · Open-Meteo ${f.omR3!=null?`<b>${f.omR3}</b> มม.`:"-"}<br>เป็นค่าพยากรณ์ อาจคลาดเคลื่อนทั้งปริมาณและตำแหน่งฝน</p></div>`; })()}
+    ${(()=>{ const u = upstreamOf(s); if(!u) return "";
+      return `<div class="sec"><h4>🏞️ น้ำเหนือ 3 วันข้างหน้า</h4>
+        <p class="note" style="margin:0 0 6px">${u.riverKm == null ? "ยังไม่มีเส้นแม่น้ำ" : `ห่างแม่น้ำเจ้าพระยา ${u.riverKm} กม.`}${u.riverside ? (u.riverKm > UP_NEAR_KM ? " · ห่างริมน้ำเล็กน้อย ลดความเสี่ยง 1 ระดับ" : " · สถานีริมน้ำ") : " · ไม่อยู่ริมน้ำ น้ำเหนือไม่กระทบโดยตรง"}</p>
+        ${u.days.map(d => `<div style="margin:2px 0"><span class="lvl" style="background:${LV(d.level).hex}">${dTh(d.date)} · ${LV(d.level).name}</span> <span class="note">${d.why ? esc(d.why) : ""}${d.tideMax!=null?` · น้ำขึ้นสูงสุด ${d.tideMax} ม.${d.tideTime?` (${esc(d.tideTime)})`:""}`:""}</span></div>`).join("")}
+        <p class="note" style="margin-top:6px">ประเมินจากปริมาณน้ำที่ C.2/C.13 × เวลาเดินทางของน้ำ (~2–3 วันถึง กทม.) + น้ำทะเลหนุน ${upstream.tide?.station ? `(${esc(upstream.tide.station)})` : ""} · ใช้ประกอบการตัดสินใจ ไม่ใช่ข้อมูลยืนยันจากหน้างาน · อัปเดต ${thTime(u.at)}</p></div>`; })()}
     ${r&&r.reports?`<div class="sec"><h4>รายงานน้ำท่วมในรัศมี 3 กม. (Traffy + Longdo)</h4>${r.reports.length?`<ul class="note" style="margin:0;padding-left:18px">${r.reports.map(x=>`<li>${esc(x.title)} · ${esc(x.src)} · ${x.distKm} กม.${x.ageH!=null?` · ${x.ageH<1?"ไม่ถึง 1":Math.round(x.ageH)} ชม.ก่อน`:""}${x.active===false?" · <b>สิ้นสุดแล้ว</b>":""}</li>`).join("")}</ul><p class="note" style="margin-top:4px">นับเป็นคะแนนเฉพาะรายงานที่ยังไม่สิ้นสุดในรัศมี 1.5 กม.</p>`:`<p class="note">ไม่มีรายงานน้ำท่วมในรัศมี 3 กม. ช่วง 6 ชม. ที่ผ่านมา</p>`}</div>`:""}
     ${s.cctv?(()=>{ const c=s.cctv, names=["ถนนแห้ง","ถนนเปียก","น้ำขังขอบถนน","น้ำท่วมผิวถนน","น้ำท่วมสูง"], cols=["#1f9d63","#8aa0ad","#d9a400","#ea6a12","#e03347"];
       const vis={night:"กลางคืน",blurred:"ภาพเบลอ",obstructed:"มีสิ่งบัง",offline:"กล้องออฟไลน์"}[c.visibility];
@@ -1061,6 +1119,7 @@ db.collection("flood_stations").onSnapshot(snap => {
 db.collection("grid_events").orderBy("at","desc").limit(800).onSnapshot(snap => {
   gridEvents = snap.docs.map(d => ({id:d.id, ...d.data()})); drawMap(); drawEvents(); if(openId) drawSheet();
 }, () => {});
+db.collection("upstream").doc("latest").onSnapshot(d => { setUpstream(d.exists ? d.data() : null); drawMap(); if(openId) drawSheet(); }, () => {});
 db.collection("flood_reports").orderBy("receivedAt","desc").limit(5).onSnapshot(snap => {
   reports = snap.docs.map(d => d.data()).filter(r => r.valid !== false); drawReport();
 }, () => {});
