@@ -274,7 +274,7 @@ const ACCESS = {
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
 const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
-const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}, upstream:{ic:"🏞️", name:"น้ำเหนือ 3 วัน"}};
+const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}, upstream:{ic:"🏞️", name:"น้ำเหนือ 7 วัน"}};
 let mapMode = localStorage.getItem("fe_mode") || "flood";
 /* พายุ/ฟ้าผ่า: ใช้ Google WeatherNext ถ้าใหม่ไม่เกิน 2 ชม. ไม่งั้นใช้ Open-Meteo */
 function stormOf(s){
@@ -298,7 +298,7 @@ function insulatorOf(s){
   const level = Math.min(3, base + (base > 0 && rhMax >= 90 ? 1 : 0));
   return {...ins, rhMax, level, src: "PM2.5 Open-Meteo · ความชื้น Google WeatherNext", at: s.gweather.updatedAt, atOm: s.weather?.updatedAt};
 }
-/* น้ำเหนือ 3 วัน: เอกสาร upstream/latest จาก n8n (C.2/C.13 + น้ำขึ้นป้อมพระจุลฯ) × ระยะสถานีถึงแม่น้ำเจ้าพระยา (คำนวณในแอป) */
+/* น้ำเหนือ 7 วัน (เน้น 3 วันแรก): เอกสาร upstream/latest จาก n8n (C.2/C.13 + น้ำขึ้นป้อมพระจุลฯ) × ระยะสถานีถึงแม่น้ำเจ้าพระยา (คำนวณในแอป) */
 let upstream = null, riverPts = [], riverKmCache = {}, riverLayer = null;
 const UP_NEAR_KM = 0.5, UP_MID_KM = 1.5;   // ≤0.5 กม. ใช้ระดับเต็ม · ≤1.5 กม. ลด 1 ระดับ · ไกลกว่านั้น = ปกติ
 function setUpstream(d){
@@ -340,7 +340,7 @@ const UP_MEANING = ["ยังปลอดภัย น้ำยังไม่�
   "สถานีริมน้ำนอกแนวคันกั้นน้ำอาจมีน้ำเข้า เตรียมกระสอบทราย/ยกอุปกรณ์",
   "น้ำมีโอกาสล้นเข้าสถานีริมน้ำ เตรียมแผนป้องกันและตัดไฟ"];
 function upSummaryHtml(){
-  const u = upstream; if(!u) return `<b>🏞️ น้ำเหนือ 3 วันข้างหน้า</b><div class="note">รอข้อมูลจาก n8n</div>`;
+  const u = upstream; if(!u) return `<b>🏞️ น้ำเหนือ 7 วันข้างหน้า</b><div class="note">รอข้อมูลจาก n8n</div>`;
   const all = u.days || [], days = all.filter(d => (d.d ?? 1) <= 3), later = all.filter(d => (d.d ?? 1) > 3);
   const top = Math.max(-1, ...days.map(d => d.level ?? -1)), L = LV(top);
   const wk = Math.max(top, ...later.map(d => d.level ?? -1));
@@ -352,7 +352,7 @@ function upSummaryHtml(){
   const over = ks.filter(k => k.bankDiff != null && k.bankDiff > 0);
   const tideHi = days.find(d => d.tideMax != null && d.tideMax >= (u.thresholds?.tide ?? 1.3));
   const c2 = ks.find(k => k.code === "C2");
-  return `<b>🏞️ น้ำเหนือ 3 วันข้างหน้า</b>
+  return `<b>🏞️ น้ำเหนือ 7 วันข้างหน้า</b>
     <div class="uphead" style="border-color:${L.hex}"><span class="lvl" style="background:${L.hex}">${L.name}</span>
       <div>${UP_MEANING[Math.max(0, top)]}</div>
       <div class="note" style="margin:2px 0 0">สถานี กฟน. ริมเจ้าพระยา ${riverside.length} แห่ง${atRisk ? ` · ต้องเฝ้าระวัง <b>${atRisk}</b> แห่ง (สีบนแผนที่)` : ""}</div></div>
@@ -702,7 +702,7 @@ function drawSheet(){
       return `<div class="sec"><h4>⏳ คาดการณ์ 3 ชม. ข้างหน้า</h4><p style="margin:0 0 4px"><span class="lvl" style="background:${L.hex}">${L.name}</span> คะแนนคาด ${f.score}${f.nowScore!=null?` (ตอนนี้ ${f.nowScore})`:""}</p>
         <p class="note" style="margin:0">ฝนจะตกอีก ${f.rain3h} มม. ใน 3 ชม. → ฝนรวมประมาณ ${f.rainTotal} มม. · ใช้พยากรณ์จาก ${f.src}<br>เทียบ 2 แหล่ง: Google WeatherNext ${f.gR3!=null?`<b>${f.gR3}</b> มม.${f.gProb!=null?` (โอกาสฝน ${f.gProb}%)`:""}`:"-"} · Open-Meteo ${f.omR3!=null?`<b>${f.omR3}</b> มม.`:"-"}<br>เป็นค่าพยากรณ์ อาจคลาดเคลื่อนทั้งปริมาณและตำแหน่งฝน</p></div>`; })()}
     ${(()=>{ const u = upstreamOf(s); if(!u) return "";
-      return `<div class="sec"><h4>🏞️ น้ำเหนือ 3 วันข้างหน้า</h4>
+      return `<div class="sec"><h4>🏞️ น้ำเหนือ 7 วันข้างหน้า</h4>
         <p class="note" style="margin:0 0 6px">${u.riverKm == null ? "ยังไม่มีเส้นแม่น้ำ" : `ห่างแม่น้ำเจ้าพระยา ${u.riverKm} กม.`}${u.riverside ? (u.riverKm > UP_NEAR_KM ? " · ห่างริมน้ำเล็กน้อย ลดความเสี่ยง 1 ระดับ" : " · สถานีริมน้ำ") : " · ไม่อยู่ริมน้ำ น้ำเหนือไม่กระทบโดยตรง"}</p>
         ${u.days.map(d => `<div style="margin:2px 0"><span class="lvl" style="background:${LV(d.level).hex}">${dTh(d.date)} · ${LV(d.level).name}</span> <span class="note">${d.why ? esc(d.why) : ""}${d.tideMax!=null?` · น้ำขึ้นสูงสุด ${d.tideMax} ม.${d.tideTime?` (${esc(d.tideTime)})`:""}`:""}</span></div>`).join("")}
         ${u.later.length ? `<p class="note" style="margin:8px 0 2px"><b>แนวโน้มถึงสิ้นสัปดาห์</b> (ความมั่นใจต่ำกว่า)</p>` + u.later.map(d => `<div style="margin:2px 0;opacity:.85"><span class="lvl" style="background:${LV(d.level).hex}">${dTh(d.date)} · ${LV(d.level).name}</span> <span class="note">${d.why ? esc(d.why) : ""}</span></div>`).join("") : ""}
