@@ -294,7 +294,18 @@ function wxTip(s, mode){
   return `<div>PM2.5 ${w.pm25 ?? "-"} µg/m³ · ความชื้นสูงสุด ${w.rhMax ?? "-"}%</div><div>ห่างทะเล ${w.coastKm} กม.${w.drySeason?" · ฤดูแล้ง":""}</div><div>แหล่ง: ${w.src||"Open-Meteo"}</div>`; }
 const EVK = {flood:{name:"น้ำท่วม", ic:"🌊", hex:"#0284c7"}, wire:{name:"สายไฟ/ไฟฟ้า", ic:"⚡", hex:"#7c3aed"}, fire:{name:"ไฟไหม้", ic:"🔥", hex:"#e8590c"}, quake:{name:"แผ่นดินไหว", ic:"〰️", hex:"#334155"}};
 let gridEvents = [], evFilter = "all", evPhotoOnly = false, evStation = "";
-const evPhoto = (e, big) => e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
+/* บล็อกรูปที่ไม่ใช่ภาพเหตุการณ์: โลโก้ศูนย์ กทม. 1555 ที่ Traffy ใส่แทนเมื่อผู้แจ้งไม่แนบรูป + รูปที่ซ้ำตั้งแต่ 3 เหตุการณ์ขึ้นไป */
+const PHOTO_BLOCK = ["da2125e781282589d482070c3dba1726aa16a4a7", "801bb3cceea191bc7c4af2b60d8d37d4"];
+let photoCount = {}, photoCountN = -1;
+function okPhoto(e){
+  const u = e.photo; if(!u) return false;
+  if(PHOTO_BLOCK.some(k => u.includes(k))) return false;
+  /* เรื่องที่รับผ่านสายด่วน 1555 ขึ้นต้นด้วย "ปัญหา:" หรือมีคำว่า 1555 → ผู้แจ้งไม่ได้ถ่ายรูปเอง รูปที่แนบเป็นโลโก้ */
+  if(e.src === "Traffy" && (/^\s*ปัญหา\s*:/.test(e.title || "") || /1555/.test(e.title || ""))) return false;
+  if(photoCountN !== gridEvents.length){ photoCount = {}; for(const x of gridEvents) if(x.photo) photoCount[x.photo] = (photoCount[x.photo]||0) + 1; photoCountN = gridEvents.length; }
+  return (photoCount[u] || 0) < 3;
+}
+const evPhoto = (e, big) => okPhoto(e) ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="evph${big?"":" sm"}" src="${esc(e.photo)}" loading="lazy" referrerpolicy="no-referrer" alt="รูปจากผู้แจ้ง" onerror="this.parentNode.remove()"></a>` : "";
 let showEv = localStorage.getItem("fe_show_ev") === "1";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
 const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
@@ -733,7 +744,7 @@ function drawEvents(){
   const stOpts = stations.filter(x => stCount[x.id] || x.id === evStation).sort((a,b) => (stCount[b.id]||0) - (stCount[a.id]||0) || String(a.name).localeCompare(String(b.name),"th"));
   const cnt = k => ev.filter(e => e.kind === k).length;
   const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
-  const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || e.photo);
+  const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || okPhoto(e));
   $("#events").innerHTML = `
     <div class="rep-head"><h2>FloodEye — Grid Events</h2>
       <div class="note">24 ชั่วโมงล่าสุด · น้ำท่วมในรัศมี 5 กม. (เขต กฟน.) · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div>
