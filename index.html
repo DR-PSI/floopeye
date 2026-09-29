@@ -317,7 +317,7 @@ const AI_AC = {normal:"รถทั่วไปเข้าได้", high_vehi
 /* ชื่อที่แสดงในแอป: claude-haiku-4-5-20251001 → JUPETOR model 4-5-20251001 (ใน Firestore ยังเก็บชื่อเต็มไว้ตรวจสอบย้อนหลัง) */
 const modelLabel = m => m ? String(m).replace(/^claude-[a-z]+-/i, "JUPETOR model ") : "JUPETOR model";
 function aiFloodOf(s){
-  const a = s.aiFlood; if(!a || !a.updatedAt || hoursAgo(a.updatedAt) > 12) return null;
+  const a = s.aiFlood; if(!a || !a.updatedAt || hoursAgo(a.updatedAt) > 13) return null; /* AI รันวันละ 2 ครั้ง (06:00, 18:00) */
   const [name, lv0] = AI_ST[a.status] || AI_ST.unclear;
   const level = a.status === "flooding" && (a.trend === "rising" || (a.depthMax||0) >= 30) ? 3 : lv0;
   return {...a, name, level};
@@ -604,7 +604,7 @@ function drawSheet(){
       const ai = aiFloodOf(s), LC = ["var(--l0)","var(--l1)","var(--l2)","var(--l3)"];
       const aiHtml = ai ? `<div style="background:var(--panel2);border-radius:8px;padding:8px 10px;margin:0 0 8px"><div style="font-size:12px;color:var(--muted)">🤖 สรุปโดย AI</div>
         <b style="color:${LC[ai.level]}">${ai.name}</b>${AI_TR[ai.trend]?` · ${AI_TR[ai.trend]}`:""}${ai.depthMax!=null?` · น้ำ ${ai.depthMin!=null&&ai.depthMin!==ai.depthMax?`${ai.depthMin}–`:""}${ai.depthMax} ซม.`:""}${AI_AC[ai.access]?` · ${AI_AC[ai.access]}`:""}
-        ${ai.summary?`<p style="margin:4px 0 0">${esc(ai.summary)}</p>`:""}<div class="note" style="margin-top:4px">จากรายงาน ${ai.reports} เรื่อง · ${esc(modelLabel(ai.model))} · อัปเดต ${agoTxt(ai.updatedAt)} · AI อาจสรุปผิดพลาด</div></div>` : "";
+        ${ai.summary?`<p style="margin:4px 0 0">${esc(ai.summary)}</p>`:""}<div class="note" style="margin-top:4px">จากรายงาน ${ai.reports} เรื่อง · ${esc(modelLabel(ai.model))} · อัปเดต ${agoTxt(ai.updatedAt)}<br>ใช้ประกอบการตัดสินใจ ไม่ใช่ข้อมูลยืนยันจากหน้างาน</div></div>` : "";
       return `<div class="sec"><h4>🌊 สรุปน้ำท่วมรอบสถานี (รัศมี 3 กม.)</h4>${aiHtml}<p style="margin:0 0 4px">${ai?`<span class="note">สรุปจากกฎ:</span> `:""}<b style="color:${c}">${f.status}</b></p>
         <p class="note" style="margin:0">รายงานใน 6 ชม. ${f.count6} เรื่อง (24 ชม. ${f.count24} เรื่อง)${f.trend?` · ${f.trend}`:""} · ล่าสุด ${agoTxt(f.latestAt)}${f.depthMax!=null?`<br>ระดับน้ำที่มีการรายงาน ${f.depthMin===f.depthMax?`ประมาณ ${f.depthMax}`:`${f.depthMin}–${f.depthMax}`} ซม.`:""}<br>สรุปจากข้อความที่ประชาชนแจ้ง อาจคลาดเคลื่อน ควรดูรูปประกอบ</p></div>`; })()}
     ${(()=>{ const ev = eventsFor(s); return ev.length ? `<div class="sec"><h4>Grid Events ใกล้สถานี (24 ชม.)</h4><ul class="note" style="margin:0;padding-left:18px">${ev.map(e=>`<li>${(EVK[e.kind]||EVK.wire).ic} ${esc(e.title)} · ${esc(e.src)} · ${e.kind==="quake"?`ห่าง ${(e.nearby.find(x=>x.id===s.id)||{}).distKm} กม.`:`${e.distKm} กม.`} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}${evPhoto(e,false)}</li>`).join("")}</ul></div>` : ""; })()}
