@@ -198,6 +198,8 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
 .pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
+.pin.office{border-radius:4px;border-width:2px}
+.chip.scope{background:#0f2a3a;color:#fff;border-color:#0f2a3a;cursor:default}
 .pin.pulse{position:relative}
 .pin.pulse::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--pc);animation:ring 2.2s ease-out infinite}
 @keyframes ring{0%{transform:scale(1);opacity:.8}70%,100%{transform:scale(2.4);opacity:0}}
@@ -235,7 +237,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
   <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Grid Events</button>
-  <button data-v="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M9 7h6"/></svg>คู่มือ</button>
+  <button data-v="office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3"/></svg>ฟข./สำนักงาน</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
 
@@ -273,7 +275,7 @@ const ACCESS = {
   normal:{t:"เข้าได้ปกติ"}, high_vehicle:{t:"รถยกสูงเข้าได้"},
   no_access:{t:"เข้าไม่ได้"}, unknown:{t:"ไม่ทราบ"}
 };
-const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย"};
+const TYPE = {terminal:"สถานีต้นทาง", sub:"สถานีย่อย", office:"🏢 "};
 const MODES = {flood:{ic:"🌊", name:"น้ำท่วม"}, forecast:{ic:"⏳", name:"คาดการณ์น้ำท่วม 3 ชม."}, storm:{ic:"⛈️", name:"พายุ/ฟ้าผ่า 3 ชม."}, heat:{ic:"🌡️", name:"ความร้อนสะสมในสถานี"}, insulator:{ic:"🧂", name:"ฝุ่น/เกลือเกาะฉนวน"}, upstream:{ic:"🏞️", name:"น้ำเหนือ 7 วัน"}};
 let mapMode = localStorage.getItem("fe_mode") || "flood";
 /* พายุ/ฟ้าผ่า: ใช้ Google WeatherNext ถ้าใหม่ไม่เกิน 2 ชม. ไม่งั้นใช้ Open-Meteo */
@@ -355,7 +357,7 @@ function upSummaryHtml(){
   return `<b>🏞️ น้ำเหนือ 7 วันข้างหน้า</b>
     <div class="uphead" style="border-color:${L.hex}"><span class="lvl" style="background:${L.hex}">${L.name}</span>
       <div>${UP_MEANING[Math.max(0, top)]}</div>
-      <div class="note" style="margin:2px 0 0">สถานี กฟน. ริมเจ้าพระยา ${riverside.length} แห่ง${atRisk ? ` · ต้องเฝ้าระวัง <b>${atRisk}</b> แห่ง (สีบนแผนที่)` : ""}</div></div>
+      <div class="note" style="margin:2px 0 0">${scope === "office" ? "ฟข./สำนักงาน" : "สถานี กฟน."} ริมเจ้าพระยา ${riverside.length} แห่ง${atRisk ? ` · ต้องเฝ้าระวัง <b>${atRisk}</b> แห่ง (สีบนแผนที่)` : ""}</div></div>
     ${qMax != null ? `<div class="upq"><div>น้ำเหนือที่จะไหลถึง กทม.–นนทบุรี ประมาณ <b>${fmtQ(qMax)}</b> ลบ.ม./วินาที</div>
       <div class="upbar"><i style="width:${pct(qMax)}%;background:${L.hex}"></i>${th.map((t,i) => `<s style="left:${pct(t)}%" title="${LEVELS[i+1].name}"></s>`).join("")}</div>
       <div class="upleg">${th.map((t,i) => `<span style="left:${pct(t)}%">${LEVELS[i+1].name}<br>${fmtQ(t)}</span>`).join("")}</div></div>` : ""}
@@ -461,7 +463,12 @@ const SEED = [
 const fbApp = firebase.initializeApp(firebaseConfig, "floodeye");
 const db = fbApp.firestore();
 const auth = fbApp.auth();
-let user = null, stations = [], reports = [], filter = "all", openId = null;
+let user = null, stations = [], allSt = [], reports = [], filter = "all", openId = null;
+/* ฟข./สำนักงาน เก็บใน flood_stations เหมือนสถานี (type:"office") → n8n คำนวณความเสี่ยงให้อัตโนมัติ
+   แท็บแผนที่ = สถานีเท่านั้น · แท็บ ฟข./สำนักงาน = แผนที่เดียวกันแต่แสดงเฉพาะสำนักงาน · รายงาน/Grid Events ใช้ร่วมกัน */
+let scope = "station";
+const isOffice = s => s.type === "office";
+function applyScope(){ stations = allSt.filter(s => (scope === "office") === isOffice(s)); }
 let demo = localStorage.getItem("fe_demo") === "1";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -553,7 +560,7 @@ function drawMap(){
     const lv = mapLevel(s); if(hiddenLv.has(lv)) continue;
     const c = LV(lv).hex, size = Math.round(BASE_SIZE[lv] * k);
     const icon = window.L.divIcon({className:"", iconSize:[size,size],
-      html:`<div class="pin ${lv>=3?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
+      html:`<div class="pin ${isOffice(s)?"office":""} ${lv>=3?"pulse":""}" style="width:${size}px;height:${size}px;background:${c};--pc:${c}"></div>`});
     const mk = window.L.marker([s.lat,s.lng],{icon, zIndexOffset:(lv+1)*1000}).addTo(map);
     const r = riskOf(s), lvl = LV(lv);
     mk.bindTooltip(mapMode === "flood" ? `<div class="tip"><b>${esc(TYPE[s.type]||"สถานี")}${esc(s.name)}</b>
@@ -580,7 +587,8 @@ function drawMap(){
   stations.forEach(s => counts[mapLevel(s)]++);
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
   const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
-  $("#strip").innerHTML = [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
+  $("#strip").innerHTML = (scope === "office" ? `<span class="chip scope">🏢 ฟข./สำนักงาน ${stations.length} แห่ง${stations.length ? "" : " · เพิ่มได้ที่ ตั้งค่า"}</span>` : "")
+    + [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
     + (!showEv ? "" : Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join(""));
   $("#modes").innerHTML = `<button class="mcur" data-toggle="1" aria-label="เลือกมุมมองแผนที่">${MODES[mapMode].ic}<span class="mt">${MODES[mapMode].name}</span><span class="car">▾</span></button>`
     + `<div class="mlist">` + Object.entries(MODES).map(([k,M]) => `<button data-mode="${k}" class="${mapMode===k?"on":""}">${M.ic} ${M.name}</button>`).join("") + `</div>`;
@@ -615,6 +623,7 @@ map.on("click", () => $("#modes").classList.remove("open"));
 /* ============ LIST ============ */
 let listQ = "", listSort = "score";
 function drawList(){
+  const stations = allSt.filter(s => !isOffice(s));   // แท็บสถานี = สถานีเท่านั้น
   const cnt = {"-1":0,0:0,1:0,2:0,3:0,4:0}; stations.forEach(s => cnt[levelOf(s)]++);
   const lvChip = lv => { const I = LV(lv); return [String(lv), `<span class="dot" style="display:inline-block;background:${I.hex}"></span>${I.name}<span class="n">${cnt[lv]+(lv===3?cnt[4]:0)}</span>`]; };
   const fs = [["all",`ทั้งหมด<span class="n">${stations.length}</span>`], lvChip(3), lvChip(2), lvChip(1), lvChip(0), lvChip(-1)];
@@ -673,7 +682,7 @@ function openSheet(id){ openId = id; drawSheet(); $("#sheet").classList.add("on"
 function closeSheet(){ openId = null; $("#sheet").classList.remove("on"); $("#sheetBg").classList.remove("on"); }
 $("#sheetBg").onclick = closeSheet;
 function drawSheet(){
-  const s = stations.find(x => x.id === openId); if(!s) return closeSheet();
+  const s = allSt.find(x => x.id === openId); if(!s) return closeSheet();
   const lv = levelOf(s), lvl = LV(lv), r = riskOf(s), a = accessOf(s), c = s.confirmed;
   const can = !!user, admin = can && isAdmin();
   $("#sheet").innerHTML = `<div class="grab"></div>
@@ -732,7 +741,7 @@ function drawSheet(){
     ${can && !admin?`<div class="sec"><button class="btn" style="width:100%" onclick="unlockEdit('${esc(s.id)}')">🔒 แก้ชื่อ ตำแหน่ง หรือลบสถานี (ใช้รหัสตั้งค่า)</button></div>`:""}
     ${admin?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
       <div class="two"><input type="text" id="eName" value="${esc(s.name)}" placeholder="ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)">
-      <select id="eType"><option value="sub" ${s.type!=="terminal"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option></select></div>
+      <select id="eType"><option value="sub" ${s.type!=="terminal"&&s.type!=="office"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option><option value="office" ${s.type==="office"?"selected":""}>ฟข./สำนักงาน</option></select></div>
       <div class="seg" style="margin-top:8px"><button onclick="saveName('${esc(s.id)}')">บันทึกชื่อ</button></div></div>`:""}
     ${admin?`<div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
       <div class="two"><input type="number" step="any" id="eLat" placeholder="ละติจูด" value="${s.lat??""}" ${can?"":"disabled"}>
@@ -759,14 +768,14 @@ async function saveName(id){
   if(!isAdmin()) return toast("ต้องใส่รหัสตั้งค่าก่อน");
   const name = $("#eName").value.trim().replace(/^สถานี(ไฟฟ้า)?(ต้นทาง|ย่อย)?/,"").trim();
   if(!name) return toast("ใส่ชื่อสถานี");
-  if(stations.some(x => x.id!==id && x.name===name)) return toast("มีสถานีชื่อนี้อยู่แล้ว");
+  if(allSt.some(x => x.id!==id && x.name===name)) return toast("มีชื่อนี้อยู่แล้ว");
   try{ await db.collection("flood_stations").doc(id).set({name, type:$("#eType").value},{merge:true}); toast("บันทึกชื่อแล้ว"); }
   catch(e){ toast("บันทึกไม่สำเร็จ: "+e.message); }
 }
 async function deleteStation(id){
   if(!user) return toast("เข้าสู่ระบบก่อน");
   if(!isAdmin()) return toast("ต้องใส่รหัสตั้งค่าก่อน");
-  const s = stations.find(x => x.id === id); if(!s) return;
+  const s = allSt.find(x => x.id === id); if(!s) return;
   if(!confirm(`ลบ${TYPE[s.type]||"สถานี"}${s.name} ออกจากระบบ?\nข้อมูลคะแนนและสถานะของสถานีนี้จะหายไปด้วย`)) return;
   try{ await db.collection("flood_stations").doc(id).delete(); closeSheet(); toast(`ลบสถานี${s.name}แล้ว`); }
   catch(e){ toast("ลบไม่สำเร็จ: "+e.message); }
@@ -787,6 +796,7 @@ async function saveCoords(id){
 /* ============ REPORT ============ */
 let pendingImg = null;
 function drawReport(){
+  const stations = allSt;   // รายงานใช้ร่วมกัน สถานี + ฟข./สำนักงาน
   const groups = {3:[],2:[],1:[],0:[],"-1":[]};
   stations.forEach(s => { const lv = levelOf(s); (groups[lv] || groups[3]).push(s); });
   Object.values(groups).forEach(g => g.sort((a,b)=>((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th")));
@@ -799,7 +809,7 @@ function drawReport(){
     return `<li><a href="#" onclick="openSheet('${esc(s.id)}');return false" style="color:inherit">${esc(TYPE[s.type]||"")}${esc(s.name)}</a> <span class="note">· ${bits.map(esc).join(" · ")}</span></li>`; };
   $("#report").innerHTML = `
     <div class="rep-head"><h2>สถานการณ์น้ำท่วมสถานีไฟฟ้า</h2>
-      <div class="note">ณ ${thTime(new Date().toISOString())} · ทั้งหมด ${stations.length} สถานี</div>
+      <div class="note">ณ ${thTime(new Date().toISOString())} · สถานี ${stations.filter(x=>!isOffice(x)).length} แห่ง${stations.some(isOffice) ? ` · 🏢 ฟข./สำนักงาน ${stations.filter(isOffice).length} แห่ง` : ""}</div>
       <div class="rep-grid">${order.map(lv=>`<div><b style="color:${info(lv).hex}">${groups[lv].length}</b><span>${info(lv).name}</span></div>`).join("")}</div>
     </div>
     ${order.filter(lv => groups[lv].length).map(lv => `
@@ -841,6 +851,7 @@ async function readInfographic(){
 
 /* ============ EVENTS ============ */
 function drawEvents(){
+  const stations = allSt;
   const evAll = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
   const inSt = e => e.stationId === evStation || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === evStation));
   const ev = evStation ? evAll.filter(inSt) : evAll;
@@ -875,9 +886,10 @@ function drawEvents(){
 
 /* ============ GUIDE ============ */
 function gtable(head, rows){ return `<div class="gt-wrap"><table class="gt"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`; }
+function showView(v){ document.querySelectorAll(".view").forEach(el => el.classList.toggle("on", el.id === "v-"+v)); window.scrollTo(0,0); }
 function drawGuide(){
   const dot = i => `<span class="lv-dot" style="background:${LEVELS[i].hex}"></span>`;
-  $("#guide").innerHTML = `
+  $("#guide").innerHTML = `<button class="btn sm" style="margin-bottom:10px" onclick="showView('settings')">← กลับไปตั้งค่า</button>
   <div class="rep-head"><h2>FloodEye ทำงานอย่างไร</h2>
     <p style="margin:0">FloodEye ประเมินความเสี่ยงน้ำท่วมของสถานีไฟฟ้าโดยไม่ต้องติดตั้งเซนเซอร์ที่สถานี ระบบดึงข้อมูลสาธารณะจากหน่วยงานภายนอกทุก 15 นาที นำมาจับคู่กับพิกัดของแต่ละสถานี แล้วคำนวณเป็นคะแนนความเสี่ยง 0–100 คะแนน</p></div>
 
@@ -964,14 +976,18 @@ function drawGuide(){
 
 /* ============ SETTINGS ============ */
 function drawSettings(){
+  const stations = allSt;
   $("#settings").innerHTML = `
     <div class="card" style="margin-top:0"><h3>บัญชี</h3>
       <p class="note">${user?`เข้าสู่ระบบเป็น ${esc(user.email)}`:"ยังไม่ได้เข้าสู่ระบบ ดูข้อมูลได้ แต่แก้ไขไม่ได้"}</p></div>
-    <div class="card"><h3>เพิ่มสถานี</h3>
-      <label for="nName">ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)</label><input type="text" id="nName" placeholder="เช่น ลาดกระบัง">
-      <label for="nType">ประเภท</label><select id="nType"><option value="sub">สถานีย่อย</option><option value="terminal">สถานีต้นทาง</option></select>
+    <div class="card"><h3>📖 คู่มือการใช้งาน</h3>
+      <p class="note">วิธีอ่านระดับความเสี่ยง แหล่งข้อมูล และเกณฑ์ที่ใช้</p>
+      <button class="btn" style="width:100%" onclick="showView('guide')">เปิดคู่มือ</button></div>
+    <div class="card"><h3>เพิ่มสถานี / ฟข./สำนักงาน</h3>
+      <label for="nType">ประเภท</label><select id="nType"><option value="sub">สถานีย่อย</option><option value="terminal">สถานีต้นทาง</option><option value="office">ฟข./สำนักงาน</option></select>
+      <label for="nName">ชื่อ (สถานีไม่ต้องใส่คำว่าสถานี · สำนักงานใส่ชื่อเต็ม เช่น ฟข.บางเขน)</label><input type="text" id="nName" placeholder="เช่น ลาดกระบัง หรือ ฟข.บางเขน">
       <div class="two"><div><label for="nLat">ละติจูด</label><input type="number" step="any" id="nLat"></div><div><label for="nLng">ลองจิจูด</label><input type="number" step="any" id="nLng"></div></div>
-      <button class="btn pri" style="width:100%;margin-top:12px" ${user?"":"disabled"} onclick="addStation()">เพิ่มสถานี</button>
+      <button class="btn pri" style="width:100%;margin-top:12px" ${user?"":"disabled"} onclick="addStation()">เพิ่ม</button>
       ${stations.length?"":`<button class="btn" style="width:100%;margin-top:8px" ${user?"":"disabled"} onclick="seedStations()">นำเข้า 6 สถานีจากรายงาน กฟน. 26 ก.ย. 69</button>`}
     </div>
     <div class="card"><h3>ส่งออกรายชื่อสถานี</h3>
@@ -1037,7 +1053,7 @@ function parseStationFile(text, fname){
     else if(j.features) raw = j.features.map(f => { const p=f.properties||{}; return {tags: p.tags||p, ...(f.geometry?.type==="Point"?{lng:f.geometry.coordinates[0],lat:f.geometry.coordinates[1]}:centroid(f.geometry||{}))}; });
   }
   const upd = !!$("#impUpdate")?.checked;
-  const byKey = new Map(stations.map(s => [keyName(s.name), s])), byId = new Map(stations.map(s => [s.id, s]));
+  const byKey = new Map(allSt.filter(s => !isOffice(s)).map(s => [keyName(s.name), s])), byId = new Map(allSt.map(s => [s.id, s]));
   const seen = new Set(), out = [], skip = {noname:0, other:0, dup:0, nopos:0};
   for(const r of raw){
     const t = r.tags||{}, name = t["name:th"] || t.name || t["name:en"] || "";
@@ -1080,7 +1096,7 @@ async function commitImport(){
   }catch(e){ toast("นำเข้าไม่สำเร็จ: "+e.message); }
 }
 async function purgeNoName(){
-  const list = stations.filter(s => s._noname && s.lat == null); if(!list.length) return;
+  const list = allSt.filter(s => s._noname && s.lat == null); if(!list.length) return;
   if(!confirm(`ลบ ${list.length} รายการที่ไม่มีชื่อ?`)) return;
   try{ for(let i=0;i<list.length;i+=400){ const b=db.batch(); list.slice(i,i+400).forEach(s=>b.delete(db.collection("flood_stations").doc(s.id))); await b.commit(); }
     toast(`ลบ ${list.length} รายการแล้ว`); }
@@ -1090,9 +1106,9 @@ async function exportStations(){
   if(sessionStorage.getItem("fe_settings_ok") !== "1" && !(await askSettingsPw("การส่งออกรายชื่อและพิกัดสถานีต้องใช้รหัสผ่านตั้งค่า", "ส่งออก CSV"))) return;
   const q = v => { v = v==null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
   const rows = [["id","name","type","lat","lng","level","score","rain24h_mm","google_maps"]];
-  stations.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"th")).forEach(s => {
+  allSt.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"th")).forEach(s => {
     const r = riskOf(s), lv = levelOf(s);
-    rows.push([s.id, s.name, s.type==="terminal"?"ต้นทาง":"ย่อย", s.lat ?? "", s.lng ?? "", lv<0?"":LV(lv).name, r?.score ?? "", r?.rain24h ?? "",
+    rows.push([s.id, s.name, s.type==="terminal"?"ต้นทาง":s.type==="office"?"ฟข./สำนักงาน":"ย่อย", s.lat ?? "", s.lng ?? "", lv<0?"":LV(lv).name, r?.score ?? "", r?.rain24h ?? "",
       s.lat!=null ? `https://www.google.com/maps?q=${s.lat},${s.lng}` : ""]);
   });
   const blob = new Blob(["\uFEFF" + rows.map(r => r.map(q).join(",")).join("\r\n")], {type:"text/csv;charset=utf-8"});
@@ -1100,19 +1116,21 @@ async function exportStations(){
   a.download = `floodeye-stations-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
-  toast(`ส่งออก ${stations.length} สถานีแล้ว ดูไฟล์ในโฟลเดอร์ Downloads`);
+  toast(`ส่งออก ${allSt.length} รายการแล้ว ดูไฟล์ในโฟลเดอร์ Downloads`);
 }
 function toggleEv(){ showEv = !showEv; localStorage.setItem("fe_show_ev", showEv ? "1" : "0"); drawMap(); drawSettings(); }
 function toggleDemo(){ demo=!demo; localStorage.setItem("fe_demo",demo?"1":"0"); renderAll(); }
 async function addStation(){
-  const name = $("#nName").value.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"").trim();
-  if(!name) return toast("ใส่ชื่อสถานี");
+  const type = $("#nType").value, off = type === "office";
+  const name = off ? $("#nName").value.trim() : $("#nName").value.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"").trim();
+  if(!name) return toast(off ? "ใส่ชื่อ ฟข./สำนักงาน" : "ใส่ชื่อสถานี");
   const lat = parseFloat($("#nLat").value), lng = parseFloat($("#nLng").value);
-  const id = name.replace(/[^\w\u0E00-\u0E7F]/g,"_");
-  if(stations.some(s=>s.id===id)) return toast("มีสถานีนี้อยู่แล้ว");
+  if(off && (isNaN(lat) || isNaN(lng))) return toast("ใส่พิกัดสำนักงานด้วย (คัดลอกจาก Google Maps)");
+  const id = (off ? "office_" : "") + name.replace(/[^\w\u0E00-\u0E7F]/g,"_");
+  if(allSt.some(s=>s.id===id)) return toast("มีรายการนี้อยู่แล้ว");
   try{
-    await db.collection("flood_stations").doc(id).set({name, type:$("#nType").value, lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng, approx:false, createdAt:new Date().toISOString()});
-    toast("เพิ่มสถานี"+name+"แล้ว");
+    await db.collection("flood_stations").doc(id).set({name, type, lat:isNaN(lat)?null:lat, lng:isNaN(lng)?null:lng, approx:false, createdAt:new Date().toISOString()});
+    toast((off ? "เพิ่ม " : "เพิ่มสถานี") + name + " แล้ว");
   }catch(e){ toast("เพิ่มไม่สำเร็จ: "+e.message); }
 }
 async function seedStations(){
@@ -1145,8 +1163,13 @@ document.querySelector("nav").addEventListener("click", async e => {
   const b = e.target.closest("button"); if(!b) return;
   if(b.dataset.v==="settings" && sessionStorage.getItem("fe_settings_ok")!=="1" && !(await askSettingsPw())) return;
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x===b));
-  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-"+b.dataset.v));
-  if(b.dataset.v==="map") setTimeout(()=>map.invalidateSize(),50);
+  const v = b.dataset.v === "office" ? "map" : b.dataset.v;
+  document.querySelectorAll(".view").forEach(el => el.classList.toggle("on", el.id === "v-"+v));
+  if(v === "map"){
+    const ns = b.dataset.v === "office" ? "office" : "station";
+    if(ns !== scope){ scope = ns; applyScope(); closeSheet(); drawMap._fit = false; drawMap(); }
+    setTimeout(()=>{ map.invalidateSize(); if(!drawMap._fit){ drawMap._fit = true; const p = stations.filter(s=>s.lat!=null).map(s=>[s.lat,s.lng]); if(p.length) fitStations(p); } },50);
+  }
 });
 $("#authBtn").onclick = async () => {
   if(user) return auth.signOut();
@@ -1157,11 +1180,11 @@ auth.onAuthStateChanged(u => { user = u; $("#authBtn").textContent = u ? "ออ
 
 function renderAll(){
   drawMap(); drawList(); drawReport(); drawEvents(); drawGuide(); drawSettings(); if(openId) drawSheet();
-  const latest = stations.map(s=>s.risk?.updatedAt).filter(Boolean).sort().pop();
+  const latest = allSt.map(s=>s.risk?.updatedAt).filter(Boolean).sort().pop();
   $("#updated").innerHTML = latest ? `ประเมินล่าสุด<br>${thTime(latest)}` : (demo ? "โหมดตัวอย่าง" : "รอข้อมูลจาก n8n");
 }
 db.collection("flood_stations").onSnapshot(snap => {
-  stations = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, _noname: !s.name, name: s.name || `(ไม่มีชื่อ: ${decodeURIComponent(s.id)})`})); renderAll();
+  allSt = snap.docs.map(d => ({id:d.id, ...d.data()})).map(s => ({...s, _noname: !s.name, name: s.name || `(ไม่มีชื่อ: ${decodeURIComponent(s.id)})`})); applyScope(); renderAll();
 }, e => { $("#updated").textContent = "เชื่อมฐานข้อมูลไม่ได้"; toast(e.message); });
 db.collection("grid_events").orderBy("at","desc").limit(800).onSnapshot(snap => {
   gridEvents = snap.docs.map(d => ({id:d.id, ...d.data()})); drawMap(); drawEvents(); if(openId) drawSheet();
