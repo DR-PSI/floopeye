@@ -224,7 +224,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 <main>
   <section class="view on" id="v-map"><div id="map"></div><div class="strip" id="strip"></div><div class="modes" id="modes"></div></section>
   <section class="view" id="v-list"><div class="pad" style="max-width:1200px">
-    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานี…" aria-label="ค้นหาสถานี"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="forecast">เรียงตามคาดการณ์ 3 ชม.</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
+    <div class="ltool"><input type="search" id="lq" placeholder="ค้นหาชื่อสถานีหรือเขต…" aria-label="ค้นหาสถานีหรือเขต"><select id="lsort" aria-label="เรียงตาม"><option value="score">เรียงตามความเสี่ยง</option><option value="forecast">เรียงตามคาดการณ์ 3 ชม.</option><option value="rain">เรียงตามฝน</option><option value="reports">เรียงตามจุดแจ้งน้ำท่วม</option><option value="name">เรียงตามชื่อ</option></select></div>
     <div class="filters" id="filters"></div>
     <div id="list"></div>
   </div></section>
@@ -235,11 +235,11 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 </main>
 
 <nav>
-  <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
-  <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
+  <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>สถานี</button>
+  <button data-v="office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3"/></svg>เขต/office</button>
+  <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สรุป</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
   <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Events</button>
-  <button data-v="office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3"/></svg>เขต/office</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
 
