@@ -262,6 +262,11 @@ const firebaseConfig = {
   appId: "1:1055859740152:web:0fc2aa85b098ddaac89a0d"
 };
 const DEFAULT_WEBHOOK = "https://n8n.hanuman.sbs/webhook";
+/* Google Maps พื้นหลัง (Maps JavaScript API) — ใส่ key ที่ล็อกโดเมน floopeye.online ไว้แล้ว · เว้นว่าง = ใช้ OSM
+   นับการเปิดแผนที่ใน Firestore usage/maps-YYYY-MM-DD (วันตามเวลาแปซิฟิก ให้ตรงกับรอบโควตา Google)
+   เกิน GMAPS_DAILY_CAP/วัน หรือ Google โหลดไม่ขึ้นใน 6 วินาที → ใช้ OSM เหมือนเดิม (300 × 31 วัน < 10,000 ฟรี/เดือน) */
+const GMAPS_KEY = "";
+const GMAPS_DAILY_CAP = 300;
 const CONFIRM_TTL_H = 12;
 const SETTINGS_PW_HASH = "6460662e217c7a9f899208dd70a2c28abdea42f128666a9b78e6c0c064846493"; // SHA-256 ของรหัสแท็บตั้งค่า   // รายงาน กฟน. มีผลกี่ชั่วโมง
 
@@ -543,8 +548,9 @@ function accessRaw(s){
 const map = L_init();
 function L_init(){
   const m = window.L.map("map",{zoomControl:false,attributionControl:true}).setView([13.76,100.62],10);
-  window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  m._osm = window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19}).addTo(m);
+  m.attributionControl.setPrefix('<span title="พื้นหลังแผนที่">🗺️ OSM</span> · <a href="https://leafletjs.com">Leaflet</a>');
   window.L.control.zoom({position:"bottomright"}).addTo(m);
   return m;
 }
@@ -552,6 +558,45 @@ let markers = {}, radiusLayer = null;
 const UpCtl = window.L.Control.extend({ options:{position:"bottomleft"},
   onAdd(){ const d = window.L.DomUtil.create("div","upbox"); window.L.DomEvent.disableClickPropagation(d); window.L.DomEvent.disableScrollPropagation(d); return d; } });
 const upCtl = new UpCtl().addTo(map);
+/* ---------- พื้นหลัง Google Maps (GoogleMutant) พร้อมสลับกลับ OSM อัตโนมัติ ---------- */
+let gmapsState = {base: "osm", today: null, reason: ""};
+const pacificDay = () => new Date().toLocaleDateString("en-CA", {timeZone: "America/Los_Angeles"});
+const loadScript = src => new Promise((ok, bad) => { const el = document.createElement("script"); el.src = src; el.async = true; el.onload = ok; el.onerror = bad; document.head.appendChild(el); });
+function useOsm(reason, gl){
+  if(gl){ try{ map.removeLayer(gl); }catch(e){} }
+  if(!map.hasLayer(map._osm)) map._osm.addTo(map);
+  gmapsState = {...gmapsState, base: "osm", reason};
+  map.attributionControl.setPrefix(`<span title="${esc(reason)}">🗺️ OSM</span> · <a href="https://leafletjs.com">Leaflet</a>`);
+  gmapsFailed = true;
+  if($("#v-settings")?.classList.contains("on")) drawSettings();
+}
+let gmapsFailed = false;
+async function initGoogleBase(){
+  if(!GMAPS_KEY){ gmapsState.reason = "ยังไม่ได้ใส่ Google Maps key"; return; }
+  const ref = db.collection("usage").doc("maps-" + pacificDay());
+  try{
+    const d = await ref.get(); const n = d.exists ? (d.data().loads || 0) : 0;
+    gmapsState.today = n;
+    if(n >= GMAPS_DAILY_CAP) return useOsm(`วันนี้เปิด Google Maps ครบ ${GMAPS_DAILY_CAP} ครั้งแล้ว`);
+    await ref.set({loads: firebase.firestore.FieldValue.increment(1)}, {merge: true});
+    gmapsState.today = n + 1;
+  }catch(e){ return useOsm("นับยอดใช้งานไม่ได้ (" + e.message + ")"); }   // นับไม่ได้ = ไม่เสี่ยงเรียก Google
+  let gl = null, done = false;
+  window.gm_authFailure = () => useOsm("Google Maps key ใช้ไม่ได้", gl);
+  const timer = setTimeout(() => { if(!done) useOsm("Google Maps โหลดไม่ขึ้นใน 6 วินาที", gl); }, 6000);
+  try{
+    await loadScript(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GMAPS_KEY)}&language=th&region=TH&v=weekly`);
+    await loadScript("https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js");
+    gl = window.L.gridLayer.googleMutant({type: "roadmap", maxZoom: 19});
+    gl.once("load", () => { if(gmapsFailed) return;   // หมดเวลา/ใช้ไม่ได้ไปแล้ว
+      done = true; clearTimeout(timer); map.removeLayer(map._osm);
+      gmapsState = {...gmapsState, base: "google", reason: ""};
+      map.attributionControl.setPrefix('<span title="พื้นหลังแผนที่">🗺️ Google</span> · <a href="https://leafletjs.com">Leaflet</a>');
+      if($("#v-settings")?.classList.contains("on")) drawSettings(); });
+    gl.addTo(map); map._osm.bringToFront && map._osm.bringToFront();   // ให้ OSM แสดงบนสุดจนกว่า Google จะพร้อม
+  }catch(e){ clearTimeout(timer); useOsm("โหลด Google Maps ไม่สำเร็จ", gl); }
+}
+initGoogleBase();
 let hiddenLv = new Set(JSON.parse(localStorage.getItem("fe_hidden") || "[]"));
 const BASE_SIZE = {"-1":8, 0:8, 1:10, 2:12, 3:14, 4:14};
 function pinScale(){ const z = map.getZoom(); return z >= 14 ? 1.7 : z >= 13 ? 1.45 : z >= 12 ? 1.2 : 1; }
@@ -1007,6 +1052,9 @@ function drawSettings(){
   $("#settings").innerHTML = `
     <div class="card" style="margin-top:0"><h3>บัญชี</h3>
       <p class="note">${user?`เข้าสู่ระบบเป็น ${esc(user.email)}`:"ยังไม่ได้เข้าสู่ระบบ ดูข้อมูลได้ แต่แก้ไขไม่ได้"}</p></div>
+    <div class="card"><h3>🗺️ พื้นหลังแผนที่</h3>
+      <p class="note" style="margin:0">ตอนนี้ใช้: <b>${gmapsState.base === "google" ? "Google Maps" : "OpenStreetMap"}</b>${gmapsState.reason ? ` · ${esc(gmapsState.reason)}` : ""}<br>
+      ${GMAPS_KEY ? `เปิด Google Maps วันนี้ ${gmapsState.today ?? "-"} / ${GMAPS_DAILY_CAP} ครั้ง (ครบแล้วสลับเป็น OSM อัตโนมัติ · รีเซ็ต 14:00–15:00 น. เวลาไทย)` : "ยังไม่ได้ใส่ Google Maps key ในโค้ด"}</p></div>
     <div class="card"><h3>📖 คู่มือการใช้งาน</h3>
       <p class="note">วิธีอ่านระดับความเสี่ยง แหล่งข้อมูล และเกณฑ์ที่ใช้</p>
       <button class="btn" style="width:100%" onclick="showView('guide')">เปิดคู่มือ</button></div>
