@@ -197,7 +197,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 @media (max-width:640px){ .modes .mlist{display:none} .modes.open .mlist{display:flex} }
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f2a3a;color:#fff;border:1px solid #0f2a3a;padding:10px 16px;border-radius:10px;z-index:1200;font-size:14px;display:none;max-width:90vw}
 .empty{text-align:center;color:var(--muted);padding:40px 16px;line-height:1.7}
-.pin{border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(15,42,58,.45)}
+.pin{border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1.5px rgba(15,42,58,.75),0 2px 6px rgba(0,0,0,.45)}
 .pin.office{border-radius:4px;border-width:2px}
 .lsec{margin:18px 2px 8px;font-size:16px}
 .lsec:first-child{margin-top:4px}
@@ -251,6 +251,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="maps-key.js"></script>
 <script>
 /* ============ CONFIG ============ */
 const firebaseConfig = {
@@ -265,7 +266,7 @@ const DEFAULT_WEBHOOK = "https://n8n.hanuman.sbs/webhook";
 /* Google Maps พื้นหลัง (Maps JavaScript API) — ใส่ key ที่ล็อกโดเมน floopeye.online ไว้แล้ว · เว้นว่าง = ใช้ OSM
    นับการเปิดแผนที่ใน Firestore usage/maps-YYYY-MM-DD (วันตามเวลาแปซิฟิก ให้ตรงกับรอบโควตา Google)
    เกิน GMAPS_DAILY_CAP/วัน หรือ Google โหลดไม่ขึ้นใน 6 วินาที → ใช้ OSM เหมือนเดิม (300 × 31 วัน < 10,000 ฟรี/เดือน) */
-const GMAPS_KEY = "AIzaSyCH9J9-qNjaE9Bf4XGgij7FRlB3YLQ8sZY";
+const GMAPS_KEY = window.FLOODEYE_GMAPS_KEY || "";   // key อยู่ในไฟล์ maps-key.js แยก → อัปโหลด index.html ใหม่ key ไม่หาย
 const GMAPS_DAILY_CAP = 300;
 const CONFIRM_TTL_H = 12;
 const SETTINGS_PW_HASH = "6460662e217c7a9f899208dd70a2c28abdea42f128666a9b78e6c0c064846493"; // SHA-256 ของรหัสแท็บตั้งค่า   // รายงาน กฟน. มีผลกี่ชั่วโมง
@@ -571,6 +572,18 @@ function useOsm(reason, gl){
   if($("#v-settings")?.classList.contains("on")) drawSettings();
 }
 let gmapsFailed = false;
+/* โทนแผนที่ Google แบบจาง: ซ่อนหมุดร้าน/สถานที่/รถไฟฟ้า ลดสี ให้หมุดสถานีเด่น (ยังเห็นถนน คลอง ชื่อเขต) */
+const GMAPS_STYLE = [
+  {featureType: "poi", stylers: [{visibility: "off"}]},
+  {featureType: "transit", stylers: [{visibility: "off"}]},
+  {featureType: "road", elementType: "labels.icon", stylers: [{visibility: "off"}]},
+  {elementType: "geometry", stylers: [{saturation: -80}, {lightness: 15}]},
+  {featureType: "road", elementType: "geometry", stylers: [{saturation: -100}, {lightness: 30}]},
+  {featureType: "water", elementType: "geometry", stylers: [{color: "#bcd7ea"}]},
+  {elementType: "labels.text.fill", stylers: [{color: "#6b7785"}]},
+  {elementType: "labels.text.stroke", stylers: [{color: "#ffffff"}, {weight: 3}]},
+  {featureType: "administrative", elementType: "geometry.stroke", stylers: [{color: "#9aa7b4"}]}
+];
 async function initGoogleBase(){
   if(!GMAPS_KEY){ gmapsState.reason = "ยังไม่ได้ใส่ Google Maps key"; return; }
   const ref = db.collection("usage").doc("maps-" + pacificDay());
@@ -587,7 +600,7 @@ async function initGoogleBase(){
   try{
     await loadScript(`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GMAPS_KEY)}&language=th&region=TH&v=weekly`);
     await loadScript("https://unpkg.com/leaflet.gridlayer.googlemutant@0.16.0/dist/Leaflet.GoogleMutant.js");
-    gl = window.L.gridLayer.googleMutant({type: "roadmap", maxZoom: 19});
+    gl = window.L.gridLayer.googleMutant({type: "roadmap", maxZoom: 19, styles: GMAPS_STYLE});
     gl.once("load", () => { if(gmapsFailed) return;   // หมดเวลา/ใช้ไม่ได้ไปแล้ว
       done = true; clearTimeout(timer); map.removeLayer(map._osm);
       gmapsState = {...gmapsState, base: "google", reason: ""};
@@ -598,7 +611,7 @@ async function initGoogleBase(){
 }
 initGoogleBase();
 let hiddenLv = new Set(JSON.parse(localStorage.getItem("fe_hidden") || "[]"));
-const BASE_SIZE = {"-1":8, 0:8, 1:10, 2:12, 3:14, 4:14};
+const BASE_SIZE = {"-1":11, 0:11, 1:14, 2:16, 3:18, 4:18};   // ใหญ่ขึ้นให้เด่นบนแผนที่ Google
 function pinScale(){ const z = map.getZoom(); return z >= 14 ? 1.7 : z >= 13 ? 1.45 : z >= 12 ? 1.2 : 1; }
 function drawMap(){
   Object.values(markers).forEach(mk => mk.remove()); markers = {};
