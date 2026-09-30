@@ -1,5 +1,5 @@
 // FloodEye service worker — เปลี่ยน VERSION ทุกครั้งที่แก้ index.html เพื่อบังคับโหลดใหม่
-const VERSION = "floodeye-v79";
+const VERSION = "floodeye-v81";
 const SHELL = ["./", "index.html", "manifest.json", "logo-eye.png", "favicon-64.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {

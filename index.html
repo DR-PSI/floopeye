@@ -236,8 +236,8 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
   <button class="on" data-v="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>แผนที่</button>
   <button data-v="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>สถานี</button>
   <button data-v="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3"/></svg>รายงาน</button>
-  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Grid Events</button>
-  <button data-v="office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3"/></svg>ฟข./สำนักงาน</button>
+  <button data-v="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Events</button>
+  <button data-v="office"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3"/></svg>เขต/office</button>
   <button data-v="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>ตั้งค่า</button>
 </nav>
 
@@ -357,7 +357,7 @@ function upSummaryHtml(){
   return `<b>🏞️ น้ำเหนือ 7 วันข้างหน้า</b>
     <div class="uphead" style="border-color:${L.hex}"><span class="lvl" style="background:${L.hex}">${L.name}</span>
       <div>${UP_MEANING[Math.max(0, top)]}</div>
-      <div class="note" style="margin:2px 0 0">${scope === "office" ? "ฟข./สำนักงาน" : "สถานี กฟน."} ริมเจ้าพระยา ${riverside.length} แห่ง${atRisk ? ` · ต้องเฝ้าระวัง <b>${atRisk}</b> แห่ง (สีบนแผนที่)` : ""}</div></div>
+      <div class="note" style="margin:2px 0 0">${scope === "office" ? "เขต/office" : "สถานี กฟน."} ริมเจ้าพระยา ${riverside.length} แห่ง${atRisk ? ` · ต้องเฝ้าระวัง <b>${atRisk}</b> แห่ง (สีบนแผนที่)` : ""}</div></div>
     ${qMax != null ? `<div class="upq"><div>น้ำเหนือที่จะไหลถึง กทม.–นนทบุรี ประมาณ <b>${fmtQ(qMax)}</b> ลบ.ม./วินาที</div>
       <div class="upbar"><i style="width:${pct(qMax)}%;background:${L.hex}"></i>${th.map((t,i) => `<s style="left:${pct(t)}%" title="${LEVELS[i+1].name}"></s>`).join("")}</div>
       <div class="upleg">${th.map((t,i) => `<span style="left:${pct(t)}%">${LEVELS[i+1].name}<br>${fmtQ(t)}</span>`).join("")}</div></div>` : ""}
@@ -401,7 +401,16 @@ let showEv = localStorage.getItem("fe_show_ev") === "1";
 let hiddenEv = new Set(JSON.parse(localStorage.getItem("fe_hidden_ev") || "[]"));
 const agoTxt = iso => { const m = Math.round((Date.now() - new Date(iso).getTime())/60000); return m < 60 ? `${Math.max(m,1)} นาทีก่อน` : m < 1440 ? `${Math.round(m/60)} ชม.ก่อน` : thTime(iso); };
 const recentEvents = () => gridEvents.filter(e => Date.now() - new Date(e.at).getTime() < 24*36e5);
-const eventsFor = s => recentEvents().filter(e => e.stationId === s.id || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === s.id)));
+/* n8n ผูกเหตุการณ์กับ "สถานีที่ใกล้ที่สุด" เท่านั้น → เขต/office คำนวณระยะในแอปเอง ด้วยรัศมีเดียวกับ n8n */
+const EV_R = {flood:5, wire:2, fire:2, quake:30};
+const evDist = (e, s) => e.lat == null || s.lat == null ? null : Math.round(kmBetween(e.lat, e.lng, s.lat, s.lng) * 10) / 10;
+function evNear(e, s){
+  if(!s) return false;
+  if(e.stationId === s.id || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === s.id))) return true;
+  if(!isOffice(s)) return false;
+  const d = evDist(e, s); return d != null && d <= (EV_R[e.kind] ?? 2);
+}
+const eventsFor = s => recentEvents().filter(e => evNear(e, s));
 /* สรุปสถานการณ์น้ำรอบสถานีจากรายงานประชาชน (Traffy/Longdo ใน Grid Events) — กฎตายตัว ไม่ใช้ AI */
 const DEPTH_WORDS = [[/ข้อเท้า/,10],[/หน้าแข้ง|ครึ่งแข้ง/,25],[/เข่า/,45],[/ต้นขา|โคนขา/,60],[/เอว|สะเอว/,85],[/หน้าอก|ระดับอก|ถึงอก/,110],[/ระดับคอ|ถึงคอ|ท่วมคอ/,140],[/มิดชั้น|ท่วมมิด|มิดหลังคา/,150]];
 function depthOf(t){
@@ -464,8 +473,8 @@ const fbApp = firebase.initializeApp(firebaseConfig, "floodeye");
 const db = fbApp.firestore();
 const auth = fbApp.auth();
 let user = null, stations = [], allSt = [], reports = [], filter = "all", openId = null;
-/* ฟข./สำนักงาน เก็บใน flood_stations เหมือนสถานี (type:"office") → n8n คำนวณความเสี่ยงให้อัตโนมัติ
-   แท็บแผนที่ = สถานีเท่านั้น · แท็บ ฟข./สำนักงาน = แผนที่เดียวกันแต่แสดงเฉพาะสำนักงาน · รายงาน/Grid Events ใช้ร่วมกัน */
+/* เขต/office เก็บใน flood_stations เหมือนสถานี (type:"office") → n8n คำนวณความเสี่ยงให้อัตโนมัติ
+   แท็บแผนที่ = สถานีเท่านั้น · แท็บ เขต/office = แผนที่เดียวกันแต่แสดงเฉพาะสำนักงาน · รายงาน/Grid Events ใช้ร่วมกัน */
 let scope = "station";
 const isOffice = s => s.type === "office";
 function applyScope(){ stations = allSt.filter(s => (scope === "office") === isOffice(s)); }
@@ -587,7 +596,7 @@ function drawMap(){
   stations.forEach(s => counts[mapLevel(s)]++);
   const chip = (lv, info) => `<button class="chip ${hiddenLv.has(lv)?"off":""}" data-lv="${lv}" title="กดเพื่อซ่อน/แสดง"><span class="dot" style="background:${info.hex}"></span>${info.name} ${counts[lv]}</button>`;
   const ev = recentEvents(), evc = k => ev.filter(e => e.kind === k).length;
-  $("#strip").innerHTML = (scope === "office" ? `<span class="chip scope">🏢 ฟข./สำนักงาน ${stations.length} แห่ง${stations.length ? "" : " · เพิ่มได้ที่ ตั้งค่า"}</span>` : "")
+  $("#strip").innerHTML = (scope === "office" ? `<span class="chip scope">🏢 เขต/office ${stations.length} แห่ง${stations.length ? "" : " · เพิ่มได้ที่ ตั้งค่า"}</span>` : "")
     + [3,2,1,0].map(i => chip(i, LEVELS[i])).join("") + chip(-1, NODATA)
     + (!showEv ? "" : Object.entries(EVK).map(([k,K]) => `<button class="chip ${hiddenEv.has(k)?"off":""}" data-ev="${k}" title="เหตุการณ์ 24 ชม. กดเพื่อซ่อน/แสดง">${K.ic} ${K.name} ${evc(k)}</button>`).join(""));
   $("#modes").innerHTML = `<button class="mcur" data-toggle="1" aria-label="เลือกมุมมองแผนที่">${MODES[mapMode].ic}<span class="mt">${MODES[mapMode].name}</span><span class="car">▾</span></button>`
@@ -741,7 +750,7 @@ function drawSheet(){
     ${can && !admin?`<div class="sec"><button class="btn" style="width:100%" onclick="unlockEdit('${esc(s.id)}')">🔒 แก้ชื่อ ตำแหน่ง หรือลบสถานี (ใช้รหัสตั้งค่า)</button></div>`:""}
     ${admin?`<div class="sec"><h4>ชื่อและประเภทสถานี</h4>
       <div class="two"><input type="text" id="eName" value="${esc(s.name)}" placeholder="ชื่อสถานี (ไม่ต้องใส่คำว่าสถานี)">
-      <select id="eType"><option value="sub" ${s.type!=="terminal"&&s.type!=="office"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option><option value="office" ${s.type==="office"?"selected":""}>ฟข./สำนักงาน</option></select></div>
+      <select id="eType"><option value="sub" ${s.type!=="terminal"&&s.type!=="office"?"selected":""}>สถานีย่อย</option><option value="terminal" ${s.type==="terminal"?"selected":""}>สถานีต้นทาง</option><option value="office" ${s.type==="office"?"selected":""}>เขต/office</option></select></div>
       <div class="seg" style="margin-top:8px"><button onclick="saveName('${esc(s.id)}')">บันทึกชื่อ</button></div></div>`:""}
     ${admin?`<div class="sec"><h4>ตำแหน่งสถานี ${s.approx?"· พิกัดโดยประมาณ ควรแก้ให้ตรง":""}</h4>
       <div class="two"><input type="number" step="any" id="eLat" placeholder="ละติจูด" value="${s.lat??""}" ${can?"":"disabled"}>
@@ -796,7 +805,7 @@ async function saveCoords(id){
 /* ============ REPORT ============ */
 let pendingImg = null;
 function drawReport(){
-  const stations = allSt;   // รายงานใช้ร่วมกัน สถานี + ฟข./สำนักงาน
+  const stations = allSt;   // รายงานใช้ร่วมกัน สถานี + เขต/office
   const groups = {3:[],2:[],1:[],0:[],"-1":[]};
   stations.forEach(s => { const lv = levelOf(s); (groups[lv] || groups[3]).push(s); });
   Object.values(groups).forEach(g => g.sort((a,b)=>((riskOf(b)?.score||0)-(riskOf(a)?.score||0)) || String(a.name).localeCompare(String(b.name),"th")));
@@ -809,7 +818,7 @@ function drawReport(){
     return `<li><a href="#" onclick="openSheet('${esc(s.id)}');return false" style="color:inherit">${esc(TYPE[s.type]||"")}${esc(s.name)}</a> <span class="note">· ${bits.map(esc).join(" · ")}</span></li>`; };
   $("#report").innerHTML = `
     <div class="rep-head"><h2>สถานการณ์น้ำท่วมสถานีไฟฟ้า</h2>
-      <div class="note">ณ ${thTime(new Date().toISOString())} · สถานี ${stations.filter(x=>!isOffice(x)).length} แห่ง${stations.some(isOffice) ? ` · 🏢 ฟข./สำนักงาน ${stations.filter(isOffice).length} แห่ง` : ""}</div>
+      <div class="note">ณ ${thTime(new Date().toISOString())} · สถานี ${stations.filter(x=>!isOffice(x)).length} แห่ง${stations.some(isOffice) ? ` · 🏢 เขต/office ${stations.filter(isOffice).length} แห่ง` : ""}</div>
       <div class="rep-grid">${order.map(lv=>`<div><b style="color:${info(lv).hex}">${groups[lv].length}</b><span>${info(lv).name}</span></div>`).join("")}</div>
     </div>
     ${order.filter(lv => groups[lv].length).map(lv => `
@@ -853,27 +862,31 @@ async function readInfographic(){
 function drawEvents(){
   const stations = allSt;
   const evAll = recentEvents().sort((a,b) => String(b.at).localeCompare(String(a.at)));
-  const inSt = e => e.stationId === evStation || (e.kind === "quake" && (e.nearby||[]).some(x => x.id === evStation));
-  const ev = evStation ? evAll.filter(inSt) : evAll;
-  /* รายชื่อสถานีที่มีเหตุการณ์ เรียงตามจำนวนเหตุการณ์ */
+  const selSt = evStation ? allSt.find(x => x.id === evStation) : null;
+  const ev = selSt ? evAll.filter(e => evNear(e, selSt)) : evAll;
+  /* รายชื่อสถานี และ เขต/office ที่มีเหตุการณ์ เรียงตามจำนวนเหตุการณ์ */
   const stCount = {}; for(const e of evAll) if(e.stationId) stCount[e.stationId] = (stCount[e.stationId]||0) + 1;
-  const stOpts = stations.filter(x => stCount[x.id] || x.id === evStation).sort((a,b) => (stCount[b.id]||0) - (stCount[a.id]||0) || String(a.name).localeCompare(String(b.name),"th"));
+  for(const o of allSt.filter(isOffice)) stCount[o.id] = evAll.filter(e => evNear(e, o)).length;
+  const byCnt = (a,b) => (stCount[b.id]||0) - (stCount[a.id]||0) || String(a.name).localeCompare(String(b.name),"th");
+  const stOpts = stations.filter(x => !isOffice(x) && (stCount[x.id] || x.id === evStation)).sort(byCnt);
+  const ofOpts = stations.filter(x => isOffice(x) && (stCount[x.id] || x.id === evStation)).sort(byCnt);
+  const opt = x => `<option value="${esc(x.id)}" ${x.id===evStation?"selected":""}>${esc(TYPE[x.type]||"สถานี")}${esc(x.name)} · ${stCount[x.id]||0}</option>`;
   const cnt = k => ev.filter(e => e.kind === k).length;
   const fs = [["all", `ทั้งหมด ${ev.length}`], ...Object.entries(EVK).map(([k,K]) => [k, `${K.ic} ${K.name} ${cnt(k)}`])];
   const list = (evFilter === "all" ? ev : ev.filter(e => e.kind === evFilter)).filter(e => !evPhotoOnly || okPhoto(e));
   $("#events").innerHTML = `
-    <div class="rep-head"><h2>FloodEye — Grid Events</h2>
+    <div class="rep-head"><h2>FloodEye — Events</h2>
       <div class="note">24 ชั่วโมงล่าสุด · น้ำท่วมในรัศมี 5 กม. (เขต กฟน.) · สายไฟ/ไฟไหม้ในรัศมี 2 กม. · แผ่นดินไหวในรัศมี 30 กม. · จาก Traffy Fondue และ Longdo Traffic</div>
       <a class="btn sm" href="gistda.html" style="display:inline-block;margin-top:8px;text-decoration:none">🛰️ ดูน้ำท่วมจากดาวเทียม GISTDA</a></div>
     <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
-      <select id="evSt" style="flex:1;max-width:420px"><option value="">📍 ทุกสถานี (${evAll.length} เหตุการณ์)</option>${stOpts.map(x => `<option value="${esc(x.id)}" ${x.id===evStation?"selected":""}>${esc(TYPE[x.type]||"สถานี")}${esc(x.name)} · ${stCount[x.id]||0}</option>`).join("")}</select>
+      <select id="evSt" style="flex:1;max-width:420px"><option value="">📍 ทุกสถานีและเขต (${evAll.length} เหตุการณ์)</option>${ofOpts.length ? `<optgroup label="🏢 เขต/office">${ofOpts.map(opt).join("")}</optgroup>` : ""}${stOpts.length ? `<optgroup label="⚡ สถานี">${stOpts.map(opt).join("")}</optgroup>` : ""}</select>
       ${evStation?`<button class="btn sm" id="evStClr">✕ ล้าง</button>`:""}</div>
     <div class="filters" style="margin-top:8px">${fs.map(([k,t]) => `<button data-evf="${k}" class="${evFilter===k?"on":""}">${t}</button>`).join("")}<button data-evp="1" class="${evPhotoOnly?"on":""}">📷 เฉพาะที่มีรูป</button></div>
     ${list.length ? list.map(e => { const K = EVK[e.kind] || EVK.wire; return `<div class="evrow" style="--ec:${K.hex}">
       <div class="ic">${K.ic}</div><div style="flex:1;min-width:0">
         <div class="t">${esc(e.title)}</div>
         <div class="m">${esc(e.src)} · ${agoTxt(e.at)}${e.state?` · ${esc(e.state)}`:""}</div>
-        <div class="m">ใกล้ <a href="#" onclick="openSheet('${esc(e.stationId)}');return false">${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)}</a> ${e.distKm} กม.</div>
+        <div class="m">ใกล้ ${selSt && isOffice(selSt) ? `<a href="#" onclick="openSheet('${esc(selSt.id)}');return false">${esc(TYPE.office)}${esc(selSt.name)}</a> ${evDist(e, selSt) ?? "-"} กม. · ` : ""}<a href="#" onclick="openSheet('${esc(e.stationId)}');return false">${esc(TYPE[e.stationType]||"สถานี")}${esc(e.stationName)}</a> ${e.distKm} กม.</div>
         ${e.kind==="quake" && e.nearby?.length ? `<details style="margin-top:6px"><summary class="m" style="cursor:pointer"><b>สถานีที่ควรตรวจ ${e.nearby.length} แห่ง</b> (เรียงจากใกล้ไปไกล)</summary>
           <ol class="note" style="margin:6px 0 0;padding-left:20px">${e.nearby.map(x => `<li><a href="#" onclick="openSheet('${esc(x.id)}');return false">${esc(x.name)}</a> · ${x.distKm} กม.</li>`).join("")}</ol></details>` : ""}
         ${evPhoto(e,true)}
@@ -983,8 +996,8 @@ function drawSettings(){
     <div class="card"><h3>📖 คู่มือการใช้งาน</h3>
       <p class="note">วิธีอ่านระดับความเสี่ยง แหล่งข้อมูล และเกณฑ์ที่ใช้</p>
       <button class="btn" style="width:100%" onclick="showView('guide')">เปิดคู่มือ</button></div>
-    <div class="card"><h3>เพิ่มสถานี / ฟข./สำนักงาน</h3>
-      <label for="nType">ประเภท</label><select id="nType"><option value="sub">สถานีย่อย</option><option value="terminal">สถานีต้นทาง</option><option value="office">ฟข./สำนักงาน</option></select>
+    <div class="card"><h3>เพิ่มสถานี / เขต/office</h3>
+      <label for="nType">ประเภท</label><select id="nType"><option value="sub">สถานีย่อย</option><option value="terminal">สถานีต้นทาง</option><option value="office">เขต/office</option></select>
       <label for="nName">ชื่อ (สถานีไม่ต้องใส่คำว่าสถานี · สำนักงานใส่ชื่อเต็ม เช่น ฟข.บางเขน)</label><input type="text" id="nName" placeholder="เช่น ลาดกระบัง หรือ ฟข.บางเขน">
       <div class="two"><div><label for="nLat">ละติจูด</label><input type="number" step="any" id="nLat"></div><div><label for="nLng">ลองจิจูด</label><input type="number" step="any" id="nLng"></div></div>
       <button class="btn pri" style="width:100%;margin-top:12px" ${user?"":"disabled"} onclick="addStation()">เพิ่ม</button>
@@ -1108,7 +1121,7 @@ async function exportStations(){
   const rows = [["id","name","type","lat","lng","level","score","rain24h_mm","google_maps"]];
   allSt.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),"th")).forEach(s => {
     const r = riskOf(s), lv = levelOf(s);
-    rows.push([s.id, s.name, s.type==="terminal"?"ต้นทาง":s.type==="office"?"ฟข./สำนักงาน":"ย่อย", s.lat ?? "", s.lng ?? "", lv<0?"":LV(lv).name, r?.score ?? "", r?.rain24h ?? "",
+    rows.push([s.id, s.name, s.type==="terminal"?"ต้นทาง":s.type==="office"?"เขต/office":"ย่อย", s.lat ?? "", s.lng ?? "", lv<0?"":LV(lv).name, r?.score ?? "", r?.rain24h ?? "",
       s.lat!=null ? `https://www.google.com/maps?q=${s.lat},${s.lng}` : ""]);
   });
   const blob = new Blob(["\uFEFF" + rows.map(r => r.map(q).join(",")).join("\r\n")], {type:"text/csv;charset=utf-8"});
@@ -1123,7 +1136,7 @@ function toggleDemo(){ demo=!demo; localStorage.setItem("fe_demo",demo?"1":"0");
 async function addStation(){
   const type = $("#nType").value, off = type === "office";
   const name = off ? $("#nName").value.trim() : $("#nName").value.trim().replace(/^สถานี(ต้นทาง|ย่อย)?/,"").trim();
-  if(!name) return toast(off ? "ใส่ชื่อ ฟข./สำนักงาน" : "ใส่ชื่อสถานี");
+  if(!name) return toast(off ? "ใส่ชื่อ เขต/office" : "ใส่ชื่อสถานี");
   const lat = parseFloat($("#nLat").value), lng = parseFloat($("#nLng").value);
   if(off && (isNaN(lat) || isNaN(lng))) return toast("ใส่พิกัดสำนักงานด้วย (คัดลอกจาก Google Maps)");
   const id = (off ? "office_" : "") + name.replace(/[^\w\u0E00-\u0E7F]/g,"_");
